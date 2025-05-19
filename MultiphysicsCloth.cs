@@ -24,6 +24,7 @@ public class MultiphysicsCloth : MonoBehaviour
         particles = new Particle[numParticlesX, numParticlesY];
 
         for (int i = 0; i < numParticlesX; i++)
+        {
             for (int j = 0; j < numParticlesY; j++)
             {
                 float x = i * width / (numParticlesX - 1);
@@ -31,22 +32,60 @@ public class MultiphysicsCloth : MonoBehaviour
                 Vector3 positionLocal = new Vector3(x, y, 0);
                 Vector3 position = transform.TransformPoint(positionLocal);
 
-                particles[i, j] = new Particle(position, particleMass);
-                solver.particles.Add(particles[i, j]);
+                Particle p = new Particle(position, particleMass);
+                particles[i, j] = p;
+                solver.particles.Add(p);
 
                 if (j == numParticlesY - 1)
-                    particles[i, j].w = 0;
-
+                    p.w = 0;
             }
+        }
 
-            
+
+        for (int i = 0; i < numParticlesX; i++)
+        {
+            for (int j = 0; j < numParticlesY; j++)
+            {
+                Particle p = particles[i, j];
+
+                if (i + 1 < numParticlesX)
+                {
+                    var pr = particles[i + 1, j];
+                    var c = new DistanceConstraint(p, pr, stiffness, solver);
+                    solver.constraints.Add(c);
+                }
+
+                if (j + 1 < numParticlesY)
+                {
+                    var pu = particles[i, j + 1];
+                    var c = new DistanceConstraint(p, pu, stiffness, solver);
+                    solver.constraints.Add(c);
+                }
+
+                /*
+                if (i + 1 < numParticlesX && j + 1 < numParticlesY)
+                {
+                    var pd1 = particles[i + 1, j + 1];
+                    var c1 = new DistanceConstraint(p, pd1, stiffness, solver);
+                    solver.constraints.Add(c1);
+
+                    var pd2 = particles[i + 1, j];
+                    var pd3 = particles[i, j + 1];
+                    var c2 = new DistanceConstraint(pd2, pd3, stiffness, solver);
+                    solver.constraints.Add(c2);
+                }
+                */
+            }
+        }
+
+
+
+
     }
-
     public void renderCloth()
     {
 
     }
-
     void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.green;

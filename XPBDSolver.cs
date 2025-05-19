@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using System.Xml.Serialization;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class XPBDSolver : MonoBehaviour
@@ -14,7 +12,7 @@ public class XPBDSolver : MonoBehaviour
 
 
     [HideInInspector] public List<Particle> particles;
-    [HideInInspector] public List<DistnaceConstraint> constraints;
+    [HideInInspector] public List<DistanceConstraint> constraints;
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
 
@@ -24,7 +22,7 @@ public class XPBDSolver : MonoBehaviour
         dts2 = dts * dts;
 
         particles = new List<Particle>();
-        constraints = new List<DistnaceConstraint>();
+        constraints = new List<DistanceConstraint>();
         cloths = new List<MultiphysicsCloth>();
 
         registerCloth();
@@ -53,7 +51,7 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
-        foreach (DistnaceConstraint c in constraints)
+        foreach (DistanceConstraint c in constraints)
         {
             c.solve();
         }
@@ -99,7 +97,7 @@ public class XPBDSolver : MonoBehaviour
         if (constraints != null)
         {
             Gizmos.color = Color.black;
-            foreach (DistnaceConstraint c in constraints)
+            foreach (DistanceConstraint c in constraints)
             {
                 Gizmos.DrawLine(c.p1.positionX, c.p2.positionX);
             }
