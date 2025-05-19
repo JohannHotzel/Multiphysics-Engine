@@ -11,32 +11,23 @@ public class XPBDSolver : MonoBehaviour
     public float dts;
     public float dts2;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
-    //public float mu;
-    //public float muSp;
-    //public float muKp;
+
 
     private List<Particle> particles;
     private List<DistnaceConstraint> constraints;
+    private List<MultiphysicsCloth> cloths;
 
 
     void Start()
     {
         dts = dt / substeps;
         dts2 = dts * dts;
+
         particles = new List<Particle>();
         constraints = new List<DistnaceConstraint>();
+        cloths = new List<MultiphysicsCloth>();
 
-        Particle p1 = new Particle(new Vector3(0, 1, 0), 0f);
-        Particle p2 = new Particle(new Vector3(1, 0, 0), 1f);
-        Particle p3 = new Particle(new Vector3(2, -1, 0), 1f);
-        particles.Add(p1);
-        particles.Add(p2);
-        particles.Add(p3);
-        DistnaceConstraint constraint = new DistnaceConstraint(p1, p2, 0f, this);
-        DistnaceConstraint constraint2 = new DistnaceConstraint(p2, p3, 0f, this);
-        constraints.Add(constraint);
-        constraints.Add(constraint2);
-
+        registerCloth();
     }
 
     void FixedUpdate()
@@ -84,6 +75,15 @@ public class XPBDSolver : MonoBehaviour
         }
     }
 
+
+    private void registerCloth()
+    {
+        foreach (MultiphysicsCloth cloth in FindObjectsByType<MultiphysicsCloth>(FindObjectsSortMode.None))
+        {
+            cloth.BuildCloth(this);
+            cloths.Add(cloth);
+        }  
+    }
 
     void OnDrawGizmosSelected()
     {
