@@ -13,9 +13,9 @@ public class XPBDSolver : MonoBehaviour
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
 
 
-    private List<Particle> particles;
-    private List<DistnaceConstraint> constraints;
-    private List<MultiphysicsCloth> cloths;
+    [HideInInspector] public List<Particle> particles;
+    [HideInInspector] public List<DistnaceConstraint> constraints;
+    [HideInInspector] public List<MultiphysicsCloth> cloths;
 
 
     void Start()
@@ -80,12 +80,20 @@ public class XPBDSolver : MonoBehaviour
     {
         foreach (MultiphysicsCloth cloth in FindObjectsByType<MultiphysicsCloth>(FindObjectsSortMode.None))
         {
-            cloth.BuildCloth(this);
+            cloth.buildCloth(this);
             cloths.Add(cloth);
         }  
     }
+    private void renderCloth()
+    {
+        foreach (MultiphysicsCloth cloth in cloths)
+        {
+            cloth.renderCloth();
+        }
+    }
 
-    void OnDrawGizmosSelected()
+
+    void OnDrawGizmos()
     {
 
         if (constraints != null)
