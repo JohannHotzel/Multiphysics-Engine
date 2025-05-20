@@ -7,20 +7,26 @@ public class XPBDSolver : MonoBehaviour
     [Header("Simulation Settings")]
     public float dt = 0.02f;
     public int substeps = 10;
-    public float dts;
-    public float dts2;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
-    public float  particleRadius = 0.1f;
+    public float particleRadius = 0.1f;
+    [HideInInspector] public float dts;
+    [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
     [HideInInspector] public List<DistanceConstraint> constraints;
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
 
     [Header("Rendering Settings")]
+    public bool showParticles = true;
+    public bool showConstraints = true;
     public Mesh particleMesh;
     public Material particleMat;
     private Matrix4x4[] matrices;
     private const int batchSize = 1023;
+    public Material lineMaterial;                 // Unlit/Color-Shader
+    private Mesh lineMesh;
+    private Vector3[] verts;
+    private int[] indices;
 
     void Start()
     {
@@ -97,12 +103,17 @@ public class XPBDSolver : MonoBehaviour
 
     private void render()
     {
-        renderParticles();
+        if(showParticles)
+            renderParticles();
+
+        if(showConstraints)
+            renderDistanceConstraints();
 
         foreach (MultiphysicsCloth cloth in cloths)
         {
             cloth.renderClothSolid();
         }
+        
     }
     private void renderParticles()
     {
@@ -124,29 +135,41 @@ public class XPBDSolver : MonoBehaviour
             Graphics.DrawMeshInstanced(particleMesh, 0, particleMat, matrices, len, null, UnityEngine.Rendering.ShadowCastingMode.Off, false);
         }
     }
+    private void renderDistanceConstraints()
+    {
+        int cCount = constraints.Count;
+        if (lineMesh == null)
+        {
+            lineMesh = new Mesh { name = "ConstraintLines" };
+            lineMesh.MarkDynamic();
+        }
+
+        if (verts == null || verts.Length != cCount * 2) verts = new Vector3[cCount * 2];
+        if (indices == null || indices.Length != cCount * 2) indices = new int[cCount * 2];
+
+        for (int i = 0; i < cCount; i++)
+        {
+            var con = constraints[i];
+            Vector3 a = con.p1.positionX;
+            Vector3 b = con.p2.positionX;
+            verts[2 * i] = a;
+            verts[2 * i + 1] = b;
+            indices[2 * i] = 2 * i;
+            indices[2 * i + 1] = 2 * i + 1;
+        }
+
+        lineMesh.Clear();
+        lineMesh.vertices = verts;
+        lineMesh.SetIndices(indices, MeshTopology.Lines, 0);
+
+        Graphics.DrawMesh(lineMesh, Matrix4x4.identity, lineMaterial, 0, null, 0, null, false, false);
+        
+    }
 
 
     void OnDrawGizmos()
     {
 
-        if (constraints != null)
-        {
-            Gizmos.color = Color.black;
-            foreach (DistanceConstraint c in constraints)
-            {
-                Gizmos.DrawLine(c.p1.positionX, c.p2.positionX);
-            }
-        }
-
-        if (particles != null)
-        {
-            Gizmos.color = Color.red;
-            foreach (Particle p in particles)
-            {
-              //  Gizmos.DrawSphere(p.positionP, 0.1f);
-              //  Gizmos.DrawSphere(p.positionX, 0.1f);
-            }
-        }
     }
 
 }
