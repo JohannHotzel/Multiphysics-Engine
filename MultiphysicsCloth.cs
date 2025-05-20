@@ -12,6 +12,7 @@ public class MultiphysicsCloth : MonoBehaviour
     public float stiffness = 1f;
 
 
+
     [HideInInspector] public Particle[,] particles;
 
     void Awake()
@@ -82,10 +83,11 @@ public class MultiphysicsCloth : MonoBehaviour
 
 
     }
-    public void renderCloth()
+    public void renderClothSolid()
     {
 
     }
+
     void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.green;
