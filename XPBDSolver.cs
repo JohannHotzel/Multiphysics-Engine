@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 public class XPBDSolver : MonoBehaviour
@@ -14,6 +15,9 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public List<Particle> particles;
     [HideInInspector] public List<DistanceConstraint> constraints;
     [HideInInspector] public List<MultiphysicsCloth> cloths;
+
+    private int[] order;
+    private System.Random rng = new System.Random();
 
 
     [Header("Rendering Settings")]
@@ -38,6 +42,10 @@ public class XPBDSolver : MonoBehaviour
         cloths = new List<MultiphysicsCloth>();
 
         registerCloth();
+
+        order = new int[constraints.Count];
+        for (int i = 0; i < order.Length; i++)
+            order[i] = i;
     }
     void LateUpdate()
     {
@@ -47,6 +55,7 @@ public class XPBDSolver : MonoBehaviour
 
     void FixedUpdate()
     {
+        shuffleOrderOfConstraints();
         for (int i = 0; i < substeps; i++)
         {
             integrate();
@@ -68,10 +77,8 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
-        foreach (DistanceConstraint c in constraints)
-        {
-            c.solve();
-        }
+        for (int k = 0; k < order.Length; k++)
+            constraints[order[k]].solve();
     }
     private void solveCollisions()
     {
@@ -89,7 +96,48 @@ public class XPBDSolver : MonoBehaviour
             p.velocity = (p.positionX - p.positionP) / dts;
         }
     }
+    private void shuffleOrderOfConstraints()
+    {
+        //Shuffle indices is faster than shuffling constraints directly
+        int n = order.Length;
+        for (int i = 0; i < n; i++)
+        {
+            int j = rng.Next(i, n);
+            int tmp = order[i];
+            order[i] = order[j];
+            order[j] = tmp;
+        }
+    }
 
+/*
+    private void updateVelocitiesParallel()
+    {
+        int n = particles.Count;
+        float localDts = dts;
+
+        Parallel.For(0, n, i =>
+        {
+            Particle p = particles[i];
+            p.velocity = (p.positionX - p.positionP) / localDts;
+        });
+    }
+    private void integrateParallel()
+    {
+        int n = particles.Count;
+        float localDts = dts;
+        Vector3 localGravity = gravity;
+
+        Parallel.For(0, n, i =>
+        {
+            Particle p = particles[i];
+            Vector3 force = localGravity * p.m;
+            Vector3 acceleration = force * p.w;
+            p.velocity += acceleration * localDts;
+            p.positionP = p.positionX;
+            p.positionX += p.velocity * localDts;
+        });
+    }
+*/
 
     private void registerCloth()
     {
