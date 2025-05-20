@@ -103,17 +103,17 @@ public class XPBDSolver : MonoBehaviour
 
     private void render()
     {
-        if(showParticles)
+        if (showParticles)
             renderParticles();
 
-        if(showConstraints)
+        if (showConstraints)
             renderDistanceConstraints();
 
         foreach (MultiphysicsCloth cloth in cloths)
         {
             cloth.renderClothSolid();
         }
-        
+
     }
     private void renderParticles()
     {
@@ -163,7 +163,7 @@ public class XPBDSolver : MonoBehaviour
         lineMesh.SetIndices(indices, MeshTopology.Lines, 0);
 
         Graphics.DrawMesh(lineMesh, Matrix4x4.identity, lineMaterial, 0, null, 0, null, false, false);
-        
+
     }
 
 

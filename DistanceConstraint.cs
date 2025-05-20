@@ -7,6 +7,7 @@ public class DistanceConstraint
     public float restLength;
     public float stiffness;
     public XPBDSolver solver;
+    public float lambda;
 
     public DistanceConstraint(Particle p1, Particle p2, float stiffness, XPBDSolver solver)
     {
@@ -28,9 +29,9 @@ public class DistanceConstraint
         float alpha = stiffness / solver.dts2;
 
         float c = currentLength - restLength;
-        float lambda = c / (p1.w + p2.w + alpha);
-        
-        if(p1.w != 0)
+        lambda = c / (p1.w + p2.w + alpha);
+    
+        if (p1.w != 0)
             p1.positionX += direction * lambda * p1.w;
 
         if(p2.w != 0)

@@ -10,9 +10,6 @@ public class MultiphysicsCloth : MonoBehaviour
     public float height = 1f;
     public float particleMass = 1f;
     public float stiffness = 1f;
-
-
-
     [HideInInspector] public Particle[,] particles;
 
     void Awake()
@@ -63,19 +60,17 @@ public class MultiphysicsCloth : MonoBehaviour
                     solver.constraints.Add(c);
                 }
 
-                /*
                 if (i + 1 < numParticlesX && j + 1 < numParticlesY)
                 {
-                    var pd1 = particles[i + 1, j + 1];
-                    var c1 = new DistanceConstraint(p, pd1, stiffness, solver);
-                    solver.constraints.Add(c1);
+                    Particle pd1 = particles[i + 1, j + 1];
+                    solver.constraints.Add(new DistanceConstraint(p, pd1, stiffness, solver));
 
-                    var pd2 = particles[i + 1, j];
-                    var pd3 = particles[i, j + 1];
-                    var c2 = new DistanceConstraint(pd2, pd3, stiffness, solver);
-                    solver.constraints.Add(c2);
+                    Particle pd2 = particles[i + 1, j];
+                    Particle pd3 = particles[i, j + 1];
+                    solver.constraints.Add(new DistanceConstraint(pd2, pd3, stiffness, solver));
                 }
-                */
+
+
             }
         }
 
