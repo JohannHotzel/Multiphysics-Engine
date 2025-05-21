@@ -109,35 +109,6 @@ public class XPBDSolver : MonoBehaviour
         }
     }
 
-/*
-    private void updateVelocitiesParallel()
-    {
-        int n = particles.Count;
-        float localDts = dts;
-
-        Parallel.For(0, n, i =>
-        {
-            Particle p = particles[i];
-            p.velocity = (p.positionX - p.positionP) / localDts;
-        });
-    }
-    private void integrateParallel()
-    {
-        int n = particles.Count;
-        float localDts = dts;
-        Vector3 localGravity = gravity;
-
-        Parallel.For(0, n, i =>
-        {
-            Particle p = particles[i];
-            Vector3 force = localGravity * p.m;
-            Vector3 acceleration = force * p.w;
-            p.velocity += acceleration * localDts;
-            p.positionP = p.positionX;
-            p.positionX += p.velocity * localDts;
-        });
-    }
-*/
 
     private void registerCloth()
     {
