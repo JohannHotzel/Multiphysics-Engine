@@ -9,7 +9,6 @@ public class XPBDSolver : MonoBehaviour
     public float dt = 0.02f;
     public int substeps = 10;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
-    public float particleRadius = 0.1f;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
@@ -63,6 +62,8 @@ public class XPBDSolver : MonoBehaviour
             solveCollisions();
             updateVelocities();
         }
+        
+        
     }
     private void integrate()
     {
@@ -82,12 +83,14 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveCollisions()
     {
-        /*
-        foreach (Collision c in collisions)
+        foreach (Particle p in particles)
         {
-            c.solve();
+            if (p.w == 0) continue; 
+            CollisionDetector.detectCollisions(p);
         }
-        */
+
+
+
     }
     private void updateVelocities()
     {
@@ -137,7 +140,6 @@ public class XPBDSolver : MonoBehaviour
     private void renderParticles()
     {
         int count = particles.Count;
-        float scale = particleRadius * 2f;
 
         for (int offset = 0; offset < count; offset += batchSize)
         {
@@ -148,7 +150,7 @@ public class XPBDSolver : MonoBehaviour
             for (int i = 0; i < len; i++)
             {
                 Vector3 pos = particles[offset + i].positionX;
-                matrices[i] = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * scale);
+                matrices[i] = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * particles[offset + i].radius * 2);
             }
 
             Graphics.DrawMeshInstanced(particleMesh, 0, particleMat, matrices, len, null, UnityEngine.Rendering.ShadowCastingMode.Off, false);

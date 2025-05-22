@@ -10,6 +10,7 @@ public class MultiphysicsCloth : MonoBehaviour
     public float height = 1f;
     public float particleMass = 1f;
     public float stiffness = 1f;
+    public float radius = 0.1f;
     [HideInInspector] public Particle[,] particles;
 
     void Awake()
@@ -30,7 +31,7 @@ public class MultiphysicsCloth : MonoBehaviour
                 Vector3 positionLocal = new Vector3(x, y, 0);
                 Vector3 position = transform.TransformPoint(positionLocal);
 
-                Particle p = new Particle(position, particleMass);
+                Particle p = new Particle(position, particleMass, radius);
                 particles[i, j] = p;
                 solver.particles.Add(p);
 
