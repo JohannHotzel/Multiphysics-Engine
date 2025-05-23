@@ -12,24 +12,33 @@ public static class CollisionDetector
             return;
 
         Collider col = hits[0];
-        Vector3 closest = (col is MeshCollider meshCol && meshCol.sharedMesh != null)
+        ClosestPoint closest = (col is MeshCollider meshCol && meshCol.sharedMesh != null)
             ? GetClosestPointOnMesh(meshCol, worldPos)
-            : Vector3.zero;
+            : null;
 
-        if (closest == Vector3.zero) return;
+        if (closest == null) return;
 
-        Vector3 delta = worldPos - closest;
+        Vector3 delta = worldPos - closest.point;
         float dist = delta.magnitude;
 
         if (dist < radius)
         {
             Vector3 normal = delta / dist;
+            if (closest.isInside)
+                normal = -normal;
+                
             float penetration = radius - dist;
             p.positionX += normal * penetration;
         }
     }
 
-    private static Vector3 GetClosestPointOnMesh(MeshCollider meshCollider, Vector3 point)
+
+    public class ClosestPoint
+    {
+        public Vector3 point;
+        public bool isInside;
+    }
+    public static ClosestPoint GetClosestPointOnMesh(MeshCollider meshCollider, Vector3 point)
     {
         Mesh mesh = meshCollider.sharedMesh;
         Vector3[] verts = mesh.vertices;
@@ -38,6 +47,7 @@ public static class CollisionDetector
 
         float minDist = float.MaxValue;
         Vector3 bestPoint = tr.TransformPoint(verts[0]);
+        bool isInside = false;
 
         for (int i = 0; i < tris.Length; i += 3)
         {
@@ -56,18 +66,25 @@ public static class CollisionDetector
                 {
                     minDist = d;
                     bestPoint = proj;
+                    isInside = signedDist < 0f;
                 }
             }
             else
             {
-                TryEdge(a, b, point, ref minDist, ref bestPoint);
-                TryEdge(b, c, point, ref minDist, ref bestPoint);
-                TryEdge(c, a, point, ref minDist, ref bestPoint);
+                TryEdge(a, b, point, ref minDist, ref bestPoint, ref isInside);
+                TryEdge(b, c, point, ref minDist, ref bestPoint, ref isInside);
+                TryEdge(c, a, point, ref minDist, ref bestPoint, ref isInside);
             }
         }
-        return bestPoint;
+
+        return new ClosestPoint
+        {
+            point = bestPoint,
+            isInside = isInside
+        };
+
     }
-    private static void TryEdge(Vector3 a, Vector3 b, Vector3 p, ref float minDist, ref Vector3 bestPoint)
+    private static void TryEdge(Vector3 a, Vector3 b, Vector3 p, ref float minDist, ref Vector3 bestPoint, ref bool isInside)
     {
         Vector3 cand = ClosestPointOnSegment(a, b, p);
         float d = Vector3.Distance(p, cand);
@@ -75,6 +92,7 @@ public static class CollisionDetector
         {
             minDist = d;
             bestPoint = cand;
+            isInside = false;
         }
     }
     private static Vector3 ClosestPointOnSegment(Vector3 a, Vector3 b, Vector3 p)
