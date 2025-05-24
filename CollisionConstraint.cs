@@ -1,7 +1,7 @@
 using Unity.Mathematics;
 using UnityEngine;
 
-public class CollisionConstraint
+public class CollisionConstraint : IConstraint
 {
     Particle p;
     Vector3 pos;

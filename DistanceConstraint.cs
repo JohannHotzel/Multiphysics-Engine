@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class DistanceConstraint
+public class DistanceConstraint : IConstraint
 {
     public Particle p1;
     public Particle p2;

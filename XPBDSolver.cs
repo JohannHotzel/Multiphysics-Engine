@@ -13,7 +13,7 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
-    [HideInInspector] public List<DistanceConstraint> constraints;
+    [HideInInspector] public List<DistanceConstraint> distanceConstraints;
     [HideInInspector] public List<CollisionConstraint> collisionConstraints;
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
@@ -39,13 +39,13 @@ public class XPBDSolver : MonoBehaviour
         dts2 = dts * dts;
 
         particles = new List<Particle>();
-        constraints = new List<DistanceConstraint>();
+        distanceConstraints = new List<DistanceConstraint>();
         collisionConstraints = new List<CollisionConstraint>();
         cloths = new List<MultiphysicsCloth>();
 
         registerCloth();
 
-        order = new int[constraints.Count];
+        order = new int[distanceConstraints.Count];
         for (int i = 0; i < order.Length; i++)
             order[i] = i;
     }
@@ -79,13 +79,11 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
-
         for (int k = 0; k < collisionConstraints.Count; k++)
             collisionConstraints[k].solve();
 
         for (int k = 0; k < order.Length; k++)
-            constraints[order[k]].solve();
-
+            distanceConstraints[order[k]].solve();
     }
     private void findCollisions()
     {
@@ -175,7 +173,7 @@ public class XPBDSolver : MonoBehaviour
     }
     private void renderDistanceConstraints()
     {
-        int cCount = constraints.Count;
+        int cCount = distanceConstraints.Count;
         if (lineMesh == null)
         {
             lineMesh = new Mesh { name = "ConstraintLines" };
@@ -187,7 +185,7 @@ public class XPBDSolver : MonoBehaviour
 
         for (int i = 0; i < cCount; i++)
         {
-            var con = constraints[i];
+            var con = distanceConstraints[i];
             Vector3 a = con.p1.positionX;
             Vector3 b = con.p2.positionX;
             verts[2 * i] = a;

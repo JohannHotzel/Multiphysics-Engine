@@ -52,27 +52,27 @@ public class MultiphysicsCloth : MonoBehaviour
                 {
                     var pr = particles[i + 1, j];
                     var c = new DistanceConstraint(p, pr, stiffness, solver);
-                    solver.constraints.Add(c);
+                    solver.distanceConstraints.Add(c);
                 }
 
                 if (j + 1 < numParticlesY)
                 {
                     var pu = particles[i, j + 1];
                     var c = new DistanceConstraint(p, pu, stiffness, solver);
-                    solver.constraints.Add(c);
+                    solver.distanceConstraints.Add(c);
                 }
 
                 if(!shearConstraints) 
                     continue;
-                    
+
                 if (i + 1 < numParticlesX && j + 1 < numParticlesY)
                 {
                     Particle pd1 = particles[i + 1, j + 1];
-                    solver.constraints.Add(new DistanceConstraint(p, pd1, stiffness, solver));
+                    solver.distanceConstraints.Add(new DistanceConstraint(p, pd1, stiffness, solver));
 
                     Particle pd2 = particles[i + 1, j];
                     Particle pd3 = particles[i, j + 1];
-                    solver.constraints.Add(new DistanceConstraint(pd2, pd3, stiffness, solver));
+                    solver.distanceConstraints.Add(new DistanceConstraint(pd2, pd3, stiffness, solver));
                 }
 
 
