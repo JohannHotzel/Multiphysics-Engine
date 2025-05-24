@@ -11,6 +11,7 @@ public class MultiphysicsCloth : MonoBehaviour
     public float particleMass = 1f;
     public float stiffness = 1f;
     public float radius = 0.1f;
+    public bool shearConstraints = true; 
     [HideInInspector] public Particle[,] particles;
 
     void Awake()
@@ -61,6 +62,9 @@ public class MultiphysicsCloth : MonoBehaviour
                     solver.constraints.Add(c);
                 }
 
+                if(!shearConstraints) 
+                    continue;
+                    
                 if (i + 1 < numParticlesX && j + 1 < numParticlesY)
                 {
                     Particle pd1 = particles[i + 1, j + 1];

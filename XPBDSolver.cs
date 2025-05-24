@@ -14,6 +14,7 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
     [HideInInspector] public List<DistanceConstraint> constraints;
+    [HideInInspector] public List<CollisionConstraint> collisionConstraints;
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
     private int[] order;
@@ -39,6 +40,7 @@ public class XPBDSolver : MonoBehaviour
 
         particles = new List<Particle>();
         constraints = new List<DistanceConstraint>();
+        collisionConstraints = new List<CollisionConstraint>();
         cloths = new List<MultiphysicsCloth>();
 
         registerCloth();
@@ -55,6 +57,7 @@ public class XPBDSolver : MonoBehaviour
 
     void FixedUpdate()
     {
+        findCollisions();
         shuffleOrderOfConstraints();
         for (int i = 0; i < substeps; i++)
         {
@@ -80,13 +83,47 @@ public class XPBDSolver : MonoBehaviour
         for (int k = 0; k < order.Length; k++)
             constraints[order[k]].solve();
     }
-    private void solveCollisions()
+    private void findCollisions()
     {
+        collisionConstraints.Clear();
+
         foreach (Particle p in particles)
         {
             if (p.w == 0) continue;
-            CollisionDetector.detectCollisions(p);
+
+            Vector3 force = gravity * p.m;
+            Vector3 acceleration = force * p.w;
+            Vector3 velocity = p.velocity + acceleration * dt;
+            Vector3 pos = p.positionX + velocity * dt;
+
+            CollisionConstraint cc = CollisionDetector.detectCollisions(p, pos, GetComponent<XPBDSolver>());
+            if (cc != null)
+            {
+                collisionConstraints.Add(cc);
+            }
         }
+    }
+    private void solveCollisions()
+    {
+        /*
+        collisionConstraints.Clear();
+
+        foreach (Particle p in particles)
+        {
+            if (p.w == 0) continue;
+            Vector3 pos = p.positionX;
+            CollisionConstraint cc = CollisionDetector.detectCollisions(p, pos, GetComponent<XPBDSolver>());
+            if (cc != null)
+            {
+                collisionConstraints.Add(cc);
+            }
+        }
+        */
+        foreach (CollisionConstraint cc in collisionConstraints)
+        {
+            cc.solve();
+        }
+
     }
     private void updateVelocities()
     {

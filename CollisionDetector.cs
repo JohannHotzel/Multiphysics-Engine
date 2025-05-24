@@ -2,21 +2,20 @@ using UnityEngine;
 
 public static class CollisionDetector
 {
-    public static void detectCollisions(Particle p)
+    public static CollisionConstraint detectCollisions(Particle p, Vector3 worldPos, XPBDSolver solver)
     {
-        Vector3 worldPos = p.positionX;
         float radius = p.radius;
 
         Collider[] hits = Physics.OverlapSphere(worldPos, radius * 1.01f);
         if (hits == null || hits.Length == 0)
-            return;
+            return null;
 
         Collider col = hits[0];
         ClosestPoint closest = (col is MeshCollider meshCol && meshCol.sharedMesh != null)
             ? GetClosestPointOnMesh(meshCol, worldPos)
             : null;
 
-        if (closest == null) return;
+        if (closest == null) return null;
 
         Vector3 delta = worldPos - closest.point;
         float dist = delta.magnitude;
@@ -27,10 +26,10 @@ public static class CollisionDetector
             if (closest.isInside)
                 normal = -normal;
 
-            float penetration = radius - dist;
-
-            p.positionX += normal * penetration;
+            return new CollisionConstraint(p, closest.point, normal, 0f, solver);
         }
+
+        return null;
     }
 
     public class ClosestPoint
