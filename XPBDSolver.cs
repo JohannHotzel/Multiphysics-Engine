@@ -63,7 +63,6 @@ public class XPBDSolver : MonoBehaviour
         {
             integrate();
             solveConstraints();
-            solveCollisions();
             updateVelocities();
         }
     }
@@ -80,8 +79,13 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
+
+        for (int k = 0; k < collisionConstraints.Count; k++)
+            collisionConstraints[k].solve();
+
         for (int k = 0; k < order.Length; k++)
             constraints[order[k]].solve();
+
     }
     private void findCollisions()
     {
@@ -103,28 +107,7 @@ public class XPBDSolver : MonoBehaviour
             }
         }
     }
-    private void solveCollisions()
-    {
-        /*
-        collisionConstraints.Clear();
 
-        foreach (Particle p in particles)
-        {
-            if (p.w == 0) continue;
-            Vector3 pos = p.positionX;
-            CollisionConstraint cc = CollisionDetector.detectCollisions(p, pos, GetComponent<XPBDSolver>());
-            if (cc != null)
-            {
-                collisionConstraints.Add(cc);
-            }
-        }
-        */
-        foreach (CollisionConstraint cc in collisionConstraints)
-        {
-            cc.solve();
-        }
-
-    }
     private void updateVelocities()
     {
         foreach (Particle p in particles)
