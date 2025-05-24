@@ -9,6 +9,7 @@ public class XPBDSolver : MonoBehaviour
     public float dt = 0.02f;
     public int substeps = 10;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
+    public float maxVelocity = 100f;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
@@ -62,8 +63,6 @@ public class XPBDSolver : MonoBehaviour
             solveCollisions();
             updateVelocities();
         }
-        
-        
     }
     private void integrate()
     {
@@ -85,18 +84,16 @@ public class XPBDSolver : MonoBehaviour
     {
         foreach (Particle p in particles)
         {
-            if (p.w == 0) continue; 
+            if (p.w == 0) continue;
             CollisionDetector.detectCollisions(p);
         }
-
-
-
     }
     private void updateVelocities()
     {
         foreach (Particle p in particles)
         {
-            p.velocity = (p.positionX - p.positionP) / dts;
+            Vector3 newVel = (p.positionX - p.positionP) / dts;
+            p.velocity = Vector3.ClampMagnitude(newVel, maxVelocity);
         }
     }
     private void shuffleOrderOfConstraints()

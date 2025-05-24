@@ -7,7 +7,7 @@ public static class CollisionDetector
         Vector3 worldPos = p.positionX;
         float radius = p.radius;
 
-        Collider[] hits = Physics.OverlapSphere(worldPos, radius);
+        Collider[] hits = Physics.OverlapSphere(worldPos, radius * 1.01f);
         if (hits == null || hits.Length == 0)
             return;
 
@@ -21,17 +21,17 @@ public static class CollisionDetector
         Vector3 delta = worldPos - closest.point;
         float dist = delta.magnitude;
 
-        if (dist < radius)
+        if (dist <= radius)
         {
             Vector3 normal = delta / dist;
             if (closest.isInside)
                 normal = -normal;
-                
+
             float penetration = radius - dist;
+
             p.positionX += normal * penetration;
         }
     }
-
 
     public class ClosestPoint
     {
