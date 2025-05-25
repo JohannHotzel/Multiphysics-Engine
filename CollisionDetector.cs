@@ -7,7 +7,7 @@ public static class CollisionDetector
         float radius = p.radius;
 
         Collider[] hits = Physics.OverlapSphere(worldPos, radius * 1.01f);
-        
+
         if (hits == null || hits.Length == 0)
             return null;
 
@@ -23,11 +23,11 @@ public static class CollisionDetector
 
         if (dist <= radius)
         {
-            Vector3 normal = delta / dist;
-            if (closest.isInside)
-                normal = -normal;
+            //Vector3 normal = delta / dist;
+           // if (closest.isInside)
+           //     normal = -normal;
 
-            return new CollisionConstraint(p, closest.point, normal, 0f, solver);
+            return new CollisionConstraint(p, closest.point, closest.normal, 0f, solver);
         }
 
         return null;
@@ -36,28 +36,36 @@ public static class CollisionDetector
     public class ClosestPoint
     {
         public Vector3 point;
+        public Vector3 normal;
         public bool isInside;
     }
     public static ClosestPoint GetClosestPointOnMesh(MeshCollider meshCollider, Vector3 point)
     {
         Mesh mesh = meshCollider.sharedMesh;
+        mesh.RecalculateNormals();
         Vector3[] verts = mesh.vertices;
+        Vector3[] norms = mesh.normals;
         int[] tris = mesh.triangles;
         Transform tr = meshCollider.transform;
 
         float minDist = float.MaxValue;
         Vector3 bestPoint = tr.TransformPoint(verts[0]);
+        Vector3 bestNormal = Vector3.up;
         bool isInside = false;
+
+        Vector3 GetVertexNormal(int idx)
+            => tr.TransformDirection(norms[idx]).normalized;
 
         for (int i = 0; i < tris.Length; i += 3)
         {
-            Vector3 a = tr.TransformPoint(verts[tris[i]]);
-            Vector3 b = tr.TransformPoint(verts[tris[i + 1]]);
-            Vector3 c = tr.TransformPoint(verts[tris[i + 2]]);
+            int i0 = tris[i], i1 = tris[i + 1], i2 = tris[i + 2];
+            Vector3 a = tr.TransformPoint(verts[i0]);
+            Vector3 b = tr.TransformPoint(verts[i1]);
+            Vector3 c = tr.TransformPoint(verts[i2]);
 
-            Vector3 normal = Vector3.Cross(b - a, c - a).normalized;
-            float signedDist = Vector3.Dot(normal, point - a);
-            Vector3 proj = point - signedDist * normal;
+            Vector3 faceN = Vector3.Cross(b - a, c - a).normalized;
+            float signedDist = Vector3.Dot(faceN, point - a);
+            Vector3 proj = point - signedDist * faceN;
 
             if (IsPointInTriangle(proj, a, b, c))
             {
@@ -67,41 +75,46 @@ public static class CollisionDetector
                     minDist = d;
                     bestPoint = proj;
                     isInside = signedDist < 0f;
+                    bestNormal = faceN;
                 }
             }
             else
             {
-                TryEdge(a, b, point, ref minDist, ref bestPoint, ref isInside);
-                TryEdge(b, c, point, ref minDist, ref bestPoint, ref isInside);
-                TryEdge(c, a, point, ref minDist, ref bestPoint, ref isInside);
+                TryEdge(a, b, i0, i1, point, ref minDist, ref bestPoint, ref bestNormal, ref isInside, GetVertexNormal);
+                TryEdge(b, c, i1, i2, point, ref minDist, ref bestPoint, ref bestNormal, ref isInside, GetVertexNormal);
+                TryEdge(c, a, i2, i0, point, ref minDist, ref bestPoint, ref bestNormal, ref isInside, GetVertexNormal);
             }
         }
 
         return new ClosestPoint
         {
             point = bestPoint,
+            normal = bestNormal.normalized,
             isInside = isInside
         };
-
     }
-    private static void TryEdge(Vector3 a, Vector3 b, Vector3 p, ref float minDist, ref Vector3 bestPoint, ref bool isInside)
+
+    private static void TryEdge(Vector3 a, Vector3 b, int ia, int ib, Vector3 p,
+        ref float minDist, ref Vector3 bestPoint, ref Vector3 bestNormal, ref bool isInside,
+        System.Func<int, Vector3> getVertNormal)
     {
-        Vector3 cand = ClosestPointOnSegment(a, b, p);
+        Vector3 ab = b - a;
+        float t = Vector3.Dot(p - a, ab) / Vector3.Dot(ab, ab);
+        t = Mathf.Clamp01(t);
+        Vector3 cand = a + ab * t;
         float d = Vector3.Distance(p, cand);
         if (d < minDist)
         {
             minDist = d;
             bestPoint = cand;
             isInside = false;
+            //(Gouraud-Shading)
+            Vector3 na = getVertNormal(ia);
+            Vector3 nb = getVertNormal(ib);
+            bestNormal = Vector3.Lerp(na, nb, t).normalized;
         }
     }
-    private static Vector3 ClosestPointOnSegment(Vector3 a, Vector3 b, Vector3 p)
-    {
-        Vector3 ab = b - a;
-        float t = Vector3.Dot(p - a, ab) / Vector3.Dot(ab, ab);
-        t = Mathf.Clamp01(t);
-        return a + ab * t;
-    }
+
     private static bool IsPointInTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
     {
         Vector3 v0 = c - a;
