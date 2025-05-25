@@ -7,7 +7,7 @@ public static class CollisionDetector
     {
         float radius = p.radius;
 
-        Collider[] hits = Physics.OverlapSphere(worldPos, radius * 1.0f);
+        Collider[] hits = Physics.OverlapSphere(worldPos, radius * 1f);
 
         if (hits == null || hits.Length == 0)
             return null;
@@ -22,12 +22,12 @@ public static class CollisionDetector
         Vector3 delta = worldPos - closest.point;
         float dist = delta.magnitude;
 
-        if (dist <= radius)
-        {
-            return new CollisionConstraint(p, closest.point, closest.normal, 0f, solver);
-        }
+        //if (dist <= radius)
+       // {
+            return new CollisionConstraint(p, closest.point, closest.normal, 0.0001f, solver);
+       // }
 
-        return null;
+       // return null;
     }
 
     public class ClosestPoint
