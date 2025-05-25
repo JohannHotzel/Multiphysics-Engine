@@ -7,6 +7,7 @@ public static class CollisionDetector
         float radius = p.radius;
 
         Collider[] hits = Physics.OverlapSphere(worldPos, radius * 1.01f);
+        
         if (hits == null || hits.Length == 0)
             return null;
 
