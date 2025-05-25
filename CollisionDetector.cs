@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public static class CollisionDetector
@@ -6,7 +7,7 @@ public static class CollisionDetector
     {
         float radius = p.radius;
 
-        Collider[] hits = Physics.OverlapSphere(worldPos, radius * 1.01f);
+        Collider[] hits = Physics.OverlapSphere(worldPos, radius * 1.0f);
 
         if (hits == null || hits.Length == 0)
             return null;
@@ -23,10 +24,6 @@ public static class CollisionDetector
 
         if (dist <= radius)
         {
-            //Vector3 normal = delta / dist;
-           // if (closest.isInside)
-           //     normal = -normal;
-
             return new CollisionConstraint(p, closest.point, closest.normal, 0f, solver);
         }
 
@@ -45,16 +42,16 @@ public static class CollisionDetector
         mesh.RecalculateNormals();
         Vector3[] verts = mesh.vertices;
         Vector3[] norms = mesh.normals;
+        Vector3[] averagedNormals = GetAveragedNormals(verts, norms);
         int[] tris = mesh.triangles;
         Transform tr = meshCollider.transform;
 
         float minDist = float.MaxValue;
         Vector3 bestPoint = tr.TransformPoint(verts[0]);
         Vector3 bestNormal = Vector3.up;
-        bool isInside = false;
 
         Vector3 GetVertexNormal(int idx)
-            => tr.TransformDirection(norms[idx]).normalized;
+            => tr.TransformDirection(averagedNormals[idx]).normalized;
 
         for (int i = 0; i < tris.Length; i += 3)
         {
@@ -74,28 +71,26 @@ public static class CollisionDetector
                 {
                     minDist = d;
                     bestPoint = proj;
-                    isInside = signedDist < 0f;
                     bestNormal = faceN;
                 }
             }
             else
             {
-                TryEdge(a, b, i0, i1, point, ref minDist, ref bestPoint, ref bestNormal, ref isInside, GetVertexNormal);
-                TryEdge(b, c, i1, i2, point, ref minDist, ref bestPoint, ref bestNormal, ref isInside, GetVertexNormal);
-                TryEdge(c, a, i2, i0, point, ref minDist, ref bestPoint, ref bestNormal, ref isInside, GetVertexNormal);
+                TryEdge(a, b, i0, i1, point, ref minDist, ref bestPoint, ref bestNormal, GetVertexNormal);
+                TryEdge(b, c, i1, i2, point, ref minDist, ref bestPoint, ref bestNormal, GetVertexNormal);
+                TryEdge(c, a, i2, i0, point, ref minDist, ref bestPoint, ref bestNormal, GetVertexNormal);
             }
         }
 
         return new ClosestPoint
         {
             point = bestPoint,
-            normal = bestNormal.normalized,
-            isInside = isInside
+            normal = bestNormal.normalized
         };
     }
 
     private static void TryEdge(Vector3 a, Vector3 b, int ia, int ib, Vector3 p,
-        ref float minDist, ref Vector3 bestPoint, ref Vector3 bestNormal, ref bool isInside,
+        ref float minDist, ref Vector3 bestPoint, ref Vector3 bestNormal,
         System.Func<int, Vector3> getVertNormal)
     {
         Vector3 ab = b - a;
@@ -107,11 +102,18 @@ public static class CollisionDetector
         {
             minDist = d;
             bestPoint = cand;
-            isInside = false;
             //(Gouraud-Shading)
             Vector3 na = getVertNormal(ia);
             Vector3 nb = getVertNormal(ib);
-            bestNormal = Vector3.Lerp(na, nb, t).normalized;
+
+            if (t == 0 || t == 1)
+            {
+                bestNormal = Vector3.Lerp(na, nb, t).normalized;
+            }
+            else
+            {
+                bestNormal = (na + nb).normalized;
+            }
         }
     }
 
@@ -132,5 +134,47 @@ public static class CollisionDetector
         float v = (dot00 * dot12 - dot01 * dot02) * invDenom;
 
         return (u >= 0f) && (v >= 0f) && (u + v <= 1f);
+    }
+
+    public static Vector3[] GetAveragedNormals(Vector3[] verts, Vector3[] norms)
+    {
+        int n = verts.Length;
+
+        var sumDict = new Dictionary<Vector3, Vector3>();
+        var countDict = new Dictionary<Vector3, int>();
+
+        for (int i = 0; i < n; i++)
+        {
+            Vector3 pos = verts[i];
+            Vector3 nor = norms[i];
+
+            if (!sumDict.TryGetValue(pos, out Vector3 sum))
+            {
+                sumDict[pos] = nor;
+                countDict[pos] = 1;
+            }
+            else
+            {
+                sumDict[pos] = sum + nor;
+                countDict[pos] = countDict[pos] + 1;
+            }
+        }
+
+        var avgDict = new Dictionary<Vector3, Vector3>(sumDict.Count);
+        foreach (var kv in sumDict)
+        {
+            Vector3 pos = kv.Key;
+            Vector3 sum = kv.Value;
+            int cnt = countDict[pos];
+            avgDict[pos] = (sum / cnt).normalized;
+        }
+
+        var newNormals = new Vector3[n];
+        for (int i = 0; i < n; i++)
+        {
+            newNormals[i] = avgDict[verts[i]];
+        }
+
+        return newNormals;
     }
 }

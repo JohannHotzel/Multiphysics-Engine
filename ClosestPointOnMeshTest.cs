@@ -26,7 +26,7 @@ public class ClosestPointOnMeshTest : MonoBehaviour
         Vector3[] norms = mesh.normals;
         int[] tris = mesh.triangles;
         Transform tr = meshCollider.transform;
-        
+
         Vector3[] averagedNormals = GetAveragedNormals(verts, norms);
 
 
@@ -37,7 +37,7 @@ public class ClosestPointOnMeshTest : MonoBehaviour
             Vector3 noralWorld = tr.TransformDirection(normal).normalized;
             Vector3 vertexWorld = tr.TransformPoint(verts[i]);
 
-            Debug.DrawLine(vertexWorld, vertexWorld + noralWorld * 0.5f, Color.blue);
+            //  Debug.DrawLine(vertexWorld, vertexWorld + noralWorld * 0.5f, Color.blue);
 
             Vector3 averagedNormal = averagedNormals[i];
             Vector3 averagedNormalWorld = tr.TransformDirection(averagedNormal).normalized;
@@ -55,46 +55,46 @@ public class ClosestPointOnMeshTest : MonoBehaviour
     }
 
     public static Vector3[] GetAveragedNormals(Vector3[] verts, Vector3[] norms)
-{
-    int n = verts.Length;
-    
-    var sumDict   = new Dictionary<Vector3, Vector3>();
-    var countDict = new Dictionary<Vector3, int>();
-
-    for (int i = 0; i < n; i++)
     {
-        Vector3 pos = verts[i];
-        Vector3 nor = norms[i];
-        
-        if (!sumDict.TryGetValue(pos, out Vector3 sum))
+        int n = verts.Length;
+
+        var sumDict = new Dictionary<Vector3, Vector3>();
+        var countDict = new Dictionary<Vector3, int>();
+
+        for (int i = 0; i < n; i++)
         {
-            sumDict[pos]   = nor;
-            countDict[pos] = 1;
+            Vector3 pos = verts[i];
+            Vector3 nor = norms[i];
+
+            if (!sumDict.TryGetValue(pos, out Vector3 sum))
+            {
+                sumDict[pos] = nor;
+                countDict[pos] = 1;
+            }
+            else
+            {
+                sumDict[pos] = sum + nor;
+                countDict[pos] = countDict[pos] + 1;
+            }
         }
-        else
+
+        var avgDict = new Dictionary<Vector3, Vector3>(sumDict.Count);
+        foreach (var kv in sumDict)
         {
-            sumDict[pos]   = sum + nor;
-            countDict[pos] = countDict[pos] + 1;
+            Vector3 pos = kv.Key;
+            Vector3 sum = kv.Value;
+            int cnt = countDict[pos];
+            avgDict[pos] = (sum / cnt).normalized;
         }
-    }
 
-    var avgDict = new Dictionary<Vector3, Vector3>(sumDict.Count);
-    foreach (var kv in sumDict)
-    {
-        Vector3 pos   = kv.Key;
-        Vector3 sum   = kv.Value;
-        int     cnt   = countDict[pos];
-        avgDict[pos]  = (sum / cnt).normalized;
-    }
+        var newNormals = new Vector3[n];
+        for (int i = 0; i < n; i++)
+        {
+            newNormals[i] = avgDict[verts[i]];
+        }
 
-    var newNormals = new Vector3[n];
-    for (int i = 0; i < n; i++)
-    {
-        newNormals[i] = avgDict[verts[i]];
+        return newNormals;
     }
-
-    return newNormals;
-}
 
 
 

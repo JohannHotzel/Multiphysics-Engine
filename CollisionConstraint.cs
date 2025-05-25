@@ -23,15 +23,13 @@ public class CollisionConstraint : IConstraint
     {
         if (p.w == 0) return;
 
-        Vector3 delta = p.positionX - q;
-        float dist = delta.magnitude;
+        float c = Vector3.Dot(p.positionX - q, n) - p.radius;
+        if (c > 0) return;
 
-        if (dist <= p.radius)
-        {
-            float alpha = stiffness / solver.dts2;
-            float penetration = (p.radius - dist) / (p.w + alpha);
-            p.positionX += n * penetration * p.w;
-        }
+        float alpha = stiffness / solver.dts2;
+        float lambda = -c / (p.w + alpha);
+
+        p.positionX += lambda * p.w * n;
     }
 
 }
