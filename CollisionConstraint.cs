@@ -7,14 +7,16 @@ public class CollisionConstraint : IConstraint
     Vector3 pos;
     Vector3 q;
     Vector3 n;
+    float d;
     float stiffness;
     XPBDSolver solver;
 
-    public CollisionConstraint(Particle p, Vector3 q, Vector3 n, float stiffness, XPBDSolver solver)
+    public CollisionConstraint(Particle p, Vector3 q, Vector3 n, float d, float stiffness, XPBDSolver solver)
     {
         this.p = p;
         this.q = q;
         this.n = n;
+        this.d = d;
         this.stiffness = stiffness;
         this.solver = solver;
     }
@@ -23,13 +25,22 @@ public class CollisionConstraint : IConstraint
     {
         if (p.w == 0) return;
 
-        float c = Vector3.Dot(p.positionX - q, n);
+        float maxVel = Mathf.Max(d - solver.vMax * solver.dt, 0);
+        float c = Vector3.Dot(p.positionX - q, n) + maxVel;
         if (c >= 0) return;
-
-        float alpha = stiffness / solver.dts2;
-        float lambda = -c / (p.w + alpha);
-
-        p.positionX += lambda * p.w * n;
+        p.positionX += -c * n;
     }
 
 }
+
+
+
+/*
+float c = Vector3.Dot(p.positionX - q, n);
+if (c >= 0) return;
+
+float alpha = stiffness / solver.dts2;
+float lambda = -c / (p.w + alpha);
+
+p.positionX += lambda * p.w * n;
+*/

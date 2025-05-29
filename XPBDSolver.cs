@@ -9,7 +9,7 @@ public class XPBDSolver : MonoBehaviour
     public float dt = 0.02f;
     public int substeps = 10;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
-    public float maxVelocity = 100f;
+    public float vMax = 100f;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
@@ -54,10 +54,9 @@ public class XPBDSolver : MonoBehaviour
         render();
     }
 
-
     void FixedUpdate()
     {
-        findCollisions();
+        findCollisionsSubStep();
         shuffleOrderOfConstraints();
         for (int i = 0; i < substeps; i++)
         {
@@ -79,7 +78,6 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
-
         for (int k = 0; k < order.Length; k++)
             distanceConstraints[order[k]].solve();
 
@@ -87,34 +85,12 @@ public class XPBDSolver : MonoBehaviour
             collisionConstraints[k].solve();
     }
 
-    private void findCollisions()
-    {
-        collisionConstraints.Clear();
-
-        foreach (Particle p in particles)
-        {
-            if (p.w == 0) continue;
-
-            Vector3 force = gravity * p.m;
-            Vector3 acceleration = force * p.w;
-            Vector3 velocity = p.velocity + acceleration * dt;
-            Vector3 pos = p.positionX + velocity * dt;
-
-            CollisionConstraint collisionConstraint = CollisionDetector.detectCollisions(p, pos, GetComponent<XPBDSolver>());
-            if (collisionConstraint != null)
-            {
-                collisionConstraints.Add(collisionConstraint);
-            }
-        }
-
-    }
-
     private void updateVelocities()
     {
         foreach (Particle p in particles)
         {
             Vector3 newVel = (p.positionX - p.positionP) / dts;
-            p.velocity = Vector3.ClampMagnitude(newVel, maxVelocity);
+            p.velocity = newVel;
         }
     }
     private void shuffleOrderOfConstraints()
@@ -137,9 +113,37 @@ public class XPBDSolver : MonoBehaviour
             distanceConstraints[j] = tmpC;
         }
 
+        for (int i = collisionConstraints.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            var tmpC = collisionConstraints[i];
+            collisionConstraints[i] = collisionConstraints[j];
+            collisionConstraints[j] = tmpC;
+        }
+
 
     }
 
+    private void findCollisionsSubStep()
+    {
+        collisionConstraints.Clear();
+
+        foreach (Particle p in particles)
+        {
+            if (p.w == 0) continue;
+
+            Vector3 force = gravity * p.m;
+            Vector3 acceleration = force * p.w;
+            Vector3 velocity = p.velocity + acceleration * dt;
+            Vector3 pos = p.positionX + velocity * dt;
+
+            CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstep(p, pos, GetComponent<XPBDSolver>());
+            if (collisionConstraint != null)
+                collisionConstraints.Add(collisionConstraint);
+
+        }
+
+    }
 
     private void registerCloth()
     {
@@ -149,7 +153,6 @@ public class XPBDSolver : MonoBehaviour
             cloths.Add(cloth);
         }
     }
-
 
     private void render()
     {

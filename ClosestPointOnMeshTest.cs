@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
-using static CollisionDetector;
+using static ClosestPointOnMesh;
 
 [RequireComponent(typeof(MeshCollider))]
 public class ClosestPointOnMeshTest : MonoBehaviour
@@ -10,27 +10,22 @@ public class ClosestPointOnMeshTest : MonoBehaviour
     private MeshCollider meshCollider;
     private Vector3 closestPoint = Vector3.zero;
 
-    private List<ClosestPoint> closestPoints = new List<ClosestPoint>();
+    public Vector3 direction;
     public float maxDistance = 0.1f;
+    private Vector3 intersectionPoint;
+
+
 
     void Start()
     {
         meshCollider = GetComponent<MeshCollider>();
-        meshCollider.convex = true;
-
     }
 
     void Update()
     {
+        ClosestPoint cp = ClosestPointOnMesh.GetClosestPointOnMesh(meshCollider, point);
+        closestPoint = cp.point;
 
-        ClosestPoint detectorClosestPoint = CollisionDetector.GetClosestPointOnMesh(meshCollider, point);
-
-        if (detectorClosestPoint.isInside)
-        {
-            closestPoint = detectorClosestPoint.point;
-            Debug.Log(detectorClosestPoint.isInside);
-            Debug.DrawLine(closestPoint, closestPoint + detectorClosestPoint.normal * 0.1f, Color.green);
-        }
 
 
     }
@@ -38,7 +33,7 @@ public class ClosestPointOnMeshTest : MonoBehaviour
     void OnDrawGizmos()
     {
         Gizmos.color = Color.red;
-        Gizmos.DrawSphere(point, 0.1f);
+        Gizmos.DrawSphere(point, 0.05f);
 
         Gizmos.color = Color.green;
         Gizmos.DrawSphere(closestPoint, 0.1f);
