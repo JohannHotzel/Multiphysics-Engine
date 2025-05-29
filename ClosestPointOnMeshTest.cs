@@ -23,42 +23,25 @@ public class ClosestPointOnMeshTest : MonoBehaviour
     void Update()
     {
 
-
-
-        /*
         ClosestPoint detectorClosestPoint = CollisionDetector.GetClosestPointOnMesh(meshCollider, point);
-        closestPoint = detectorClosestPoint.point;
-        Debug.Log(detectorClosestPoint.isInside);
-        //   Debug.DrawLine(detectorClosestPoint.point, detectorClosestPoint.point + detectorClosestPoint.normal * 0.5f, Color.red);
-        */
 
-        closestPoints = CollisionDetector.GetClosestPointsOnMesh(meshCollider, point, maxDistance, out bool isInside);
-        Debug.Log(isInside);
-        
+        if (detectorClosestPoint.isInside)
+        {
+            closestPoint = detectorClosestPoint.point;
+            Debug.Log(detectorClosestPoint.isInside);
+            Debug.DrawLine(closestPoint, closestPoint + detectorClosestPoint.normal * 0.1f, Color.green);
+        }
 
 
     }
-
-
-
-
-
 
     void OnDrawGizmos()
     {
         Gizmos.color = Color.red;
         Gizmos.DrawSphere(point, 0.1f);
 
-        //   Gizmos.color = Color.green;
-        // Gizmos.DrawSphere(closestPoint, 0.1f);
-
-        Gizmos.color = Color.blue;
-        foreach (var cp in closestPoints)
-        {
-            Gizmos.DrawSphere(cp.point, 0.05f);
-            //Gizmos.DrawLine(cp.point, cp.point + cp.normal * 0.1f);
-            Debug.Log(cp.isInside);
-        }
+        Gizmos.color = Color.green;
+        Gizmos.DrawSphere(closestPoint, 0.1f);
 
     }
 

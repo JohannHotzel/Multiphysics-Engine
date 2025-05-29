@@ -79,16 +79,14 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
-        for (int k = 0; k < collisionConstraints.Count; k++)
-            collisionConstraints[k].solve();
 
         for (int k = 0; k < order.Length; k++)
             distanceConstraints[order[k]].solve();
 
-
-
-
+        for (int k = 0; k < collisionConstraints.Count; k++)
+            collisionConstraints[k].solve();
     }
+
     private void findCollisions()
     {
         collisionConstraints.Clear();
@@ -102,12 +100,13 @@ public class XPBDSolver : MonoBehaviour
             Vector3 velocity = p.velocity + acceleration * dt;
             Vector3 pos = p.positionX + velocity * dt;
 
-            List<CollisionConstraint> cc = CollisionDetector.detectCollisions(p, pos, GetComponent<XPBDSolver>());
-            if (cc != null)
+            CollisionConstraint collisionConstraint = CollisionDetector.detectCollisions(p, pos, GetComponent<XPBDSolver>());
+            if (collisionConstraint != null)
             {
-                collisionConstraints.AddRange(cc);
+                collisionConstraints.Add(collisionConstraint);
             }
         }
+
     }
 
     private void updateVelocities()

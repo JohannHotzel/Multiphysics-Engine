@@ -23,8 +23,8 @@ public class CollisionConstraint : IConstraint
     {
         if (p.w == 0) return;
 
-        float c = Vector3.Dot(p.positionX - q, n) - p.radius;
-        if (c > 0) return;
+        float c = Vector3.Dot(p.positionX - q, n);
+        if (c >= 0) return;
 
         float alpha = stiffness / solver.dts2;
         float lambda = -c / (p.w + alpha);
