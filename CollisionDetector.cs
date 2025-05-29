@@ -8,7 +8,7 @@ public static class CollisionDetector
 {
     public static CollisionConstraint detectCollisionSubstep(Particle p, Vector3 predictedPos, XPBDSolver solver)
     {
-        Collider[] hits = Physics.OverlapSphere(predictedPos, 0.2f);
+        Collider[] hits = Physics.OverlapSphere(predictedPos, 0.1f);
         if (hits.Length == 0) return null;
         MeshCollider meshCollider = hits.FirstOrDefault(h => h is MeshCollider) as MeshCollider;
         if (meshCollider == null) return null;

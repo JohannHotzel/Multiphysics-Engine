@@ -25,8 +25,11 @@ public class CollisionConstraint : IConstraint
     {
         if (p.w == 0) return;
 
-        float maxVel = Mathf.Max(d - solver.vMax * solver.dt, 0);
+        this.d = Vector3.Dot(p.positionX - q, n);
+
+        float maxVel = Mathf.Max(d - solver.vMax * solver.dts, 0);
         float c = Vector3.Dot(p.positionX - q, n) + maxVel;
+        //float c = Vector3.Dot(p.positionX - q, n);
         if (c >= 0) return;
         p.positionX += -c * n;
     }

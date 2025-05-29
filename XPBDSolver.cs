@@ -78,6 +78,7 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
+
         for (int k = 0; k < order.Length; k++)
             distanceConstraints[order[k]].solve();
 
@@ -120,7 +121,6 @@ public class XPBDSolver : MonoBehaviour
             collisionConstraints[i] = collisionConstraints[j];
             collisionConstraints[j] = tmpC;
         }
-
 
     }
 
