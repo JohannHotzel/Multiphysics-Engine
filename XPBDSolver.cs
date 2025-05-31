@@ -137,8 +137,8 @@ public class XPBDSolver : MonoBehaviour
             Vector3 velocity = p.velocity + acceleration * dt;
             Vector3 pos = p.positionX + velocity * dt;
 
-            CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstep(p, pos, GetComponent<XPBDSolver>());
-            //CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadius(p, pos, GetComponent<XPBDSolver>());
+            //CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstep(p, pos, GetComponent<XPBDSolver>());
+            CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadius(p, pos, GetComponent<XPBDSolver>());
             if (collisionConstraint != null)
                 collisionConstraints.Add(collisionConstraint);
 
