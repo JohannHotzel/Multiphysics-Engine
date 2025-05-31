@@ -9,7 +9,7 @@ public class XPBDSolver : MonoBehaviour
     public float dt = 0.02f;
     public int substeps = 10;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
-    public float vMax = 100f;
+    public float vMax;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
@@ -138,6 +138,7 @@ public class XPBDSolver : MonoBehaviour
             Vector3 pos = p.positionX + velocity * dt;
 
             CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstep(p, pos, GetComponent<XPBDSolver>());
+            //CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadius(p, pos, GetComponent<XPBDSolver>());
             if (collisionConstraint != null)
                 collisionConstraints.Add(collisionConstraint);
 

@@ -9,15 +9,16 @@ public class CollisionConstraint : IConstraint
     Vector3 n;
     float d;
     float stiffness;
+    float radius;
     XPBDSolver solver;
 
-    public CollisionConstraint(Particle p, Vector3 q, Vector3 n, float d, float stiffness, XPBDSolver solver)
+    public CollisionConstraint(Particle p, Vector3 q, Vector3 n, float stiffness, float radius, XPBDSolver solver)
     {
         this.p = p;
         this.q = q;
         this.n = n;
-        this.d = d;
         this.stiffness = stiffness;
+        this.radius = radius;
         this.solver = solver;
     }
 
@@ -25,12 +26,20 @@ public class CollisionConstraint : IConstraint
     {
         if (p.w == 0) return;
 
-        this.d = Vector3.Dot(p.positionX - q, n);
+        float d = Vector3.Dot(p.positionX - q, n) - radius;
 
-        float maxVel = Mathf.Max(d - solver.vMax * solver.dts, 0);
-        float c = Vector3.Dot(p.positionX - q, n) + maxVel;
-        //float c = Vector3.Dot(p.positionX - q, n);
-        if (c >= 0) return;
+        float d0 = -d;
+        if (d0 < 0f)
+        {
+            d0 = 0f;
+        }
+
+        float clamp = Mathf.Max(d0 - solver.vMax * solver.dts, 0f);
+
+        float c = d + clamp;
+        if (c >= 0f)
+            return;
+
         p.positionX += -c * n;
     }
 

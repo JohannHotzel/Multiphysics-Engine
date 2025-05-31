@@ -77,7 +77,6 @@ public class ClosestPointOnMesh
             Vector3 b = tr.TransformPoint(verts[i1]);
             Vector3 c = tr.TransformPoint(verts[i2]);
 
-            // 1) Fläche prüfen
             Vector3 faceN = Vector3.Cross(b - a, c - a).normalized;
             float signedDist = Vector3.Dot(faceN, point - a);
             Vector3 proj = point - signedDist * faceN;
