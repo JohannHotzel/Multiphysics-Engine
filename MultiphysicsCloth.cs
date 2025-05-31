@@ -11,7 +11,7 @@ public class MultiphysicsCloth : MonoBehaviour
     public float particleMass = 1f;
     public float stiffness = 1f;
     public float radius = 0.1f;
-    public bool shearConstraints = true; 
+    public bool shearConstraints = true;
     [HideInInspector] public Particle[,] particles;
 
     void Awake()
@@ -41,9 +41,12 @@ public class MultiphysicsCloth : MonoBehaviour
             }
         }
 
+        bool right = true;
 
         for (int i = 0; i < numParticlesX; i++)
         {
+            right = !right;
+
             for (int j = 0; j < numParticlesY; j++)
             {
                 Particle p = particles[i, j];
@@ -62,9 +65,28 @@ public class MultiphysicsCloth : MonoBehaviour
                     solver.distanceConstraints.Add(c);
                 }
 
-                if(!shearConstraints) 
+                if (!shearConstraints)
                     continue;
 
+                if (i + 1 < numParticlesX && j + 1 < numParticlesY)
+                {
+                    if (right)
+                    {
+                        Particle pd1 = particles[i + 1, j + 1];
+                        solver.distanceConstraints.Add(new DistanceConstraint(p, pd1, stiffness, solver));
+                        right = false;
+                    }
+
+                    else if (!right)
+                    {
+                        Particle pd2 = particles[i + 1, j];
+                        Particle pd3 = particles[i, j + 1];
+                        solver.distanceConstraints.Add(new DistanceConstraint(pd2, pd3, stiffness, solver));
+                        right = true;
+                    }
+                }
+
+                /*
                 if (i + 1 < numParticlesX && j + 1 < numParticlesY)
                 {
                     Particle pd1 = particles[i + 1, j + 1];
@@ -74,8 +96,7 @@ public class MultiphysicsCloth : MonoBehaviour
                     Particle pd3 = particles[i, j + 1];
                     solver.distanceConstraints.Add(new DistanceConstraint(pd2, pd3, stiffness, solver));
                 }
-
-
+                */
             }
         }
 

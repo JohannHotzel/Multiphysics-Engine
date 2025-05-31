@@ -23,8 +23,10 @@ public class ClosestPointOnMeshTest : MonoBehaviour
 
     void Update()
     {
-        ClosestPoint cp = ClosestPointOnMesh.GetClosestPointOnMesh(meshCollider, point);
+        ClosestPoint cp = ClosestPointOnMesh.GetClosestPointOnMeshNormal(meshCollider, point);
         closestPoint = cp.point;
+        Vector3 normal = cp.normal;
+        Debug.DrawLine(closestPoint, closestPoint + normal * 0.5f, Color.red);
 
 
 
