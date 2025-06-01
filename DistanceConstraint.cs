@@ -30,12 +30,13 @@ public class DistanceConstraint : IConstraint
 
         float c = currentLength - restLength;
         lambda = c / (p1.w + p2.w + alpha);
-    
+
         if (p1.w != 0)
             p1.positionX += direction * lambda * p1.w;
 
-        if(p2.w != 0)
+        if (p2.w != 0)
             p2.positionX -= direction * lambda * p2.w;
+
     }
 
 }

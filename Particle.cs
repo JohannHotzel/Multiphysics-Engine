@@ -8,6 +8,8 @@ public class Particle
     public float m;
     public float w;
     public float radius;
+    public GameObject parent;
+    public Vector3 parentPosition;
 
     //float radius;
     //Color color;

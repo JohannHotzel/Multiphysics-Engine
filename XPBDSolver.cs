@@ -10,6 +10,7 @@ public class XPBDSolver : MonoBehaviour
     public int substeps = 10;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
     public float vMax;
+    public float tearingThreshold = 0.1f;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
@@ -17,13 +18,13 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public List<CollisionConstraint> collisionConstraints;
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
-    private int[] order;
     private System.Random rng = new System.Random();
 
 
     [Header("Rendering Settings")]
     public bool showParticles = true;
     public bool showConstraints = true;
+    public bool showCloths = true;
     public Mesh particleMesh;
     public Material particleMat;
     private Matrix4x4[] matrices;
@@ -44,10 +45,6 @@ public class XPBDSolver : MonoBehaviour
         cloths = new List<MultiphysicsCloth>();
 
         registerCloth();
-
-        order = new int[distanceConstraints.Count];
-        for (int i = 0; i < order.Length; i++)
-            order[i] = i;
     }
     void LateUpdate()
     {
@@ -56,6 +53,7 @@ public class XPBDSolver : MonoBehaviour
 
     void FixedUpdate()
     {
+        transformWithParent();
         findCollisionsSubStep();
         shuffleOrderOfConstraints();
         for (int i = 0; i < substeps; i++)
@@ -81,10 +79,12 @@ public class XPBDSolver : MonoBehaviour
         for (int k = 0; k < collisionConstraints.Count; k++)
             collisionConstraints[k].solve();
 
-        for (int k = 0; k < order.Length; k++)
-            distanceConstraints[order[k]].solve();
-    }
+        for (int k = 0; k < distanceConstraints.Count; k++)
+            distanceConstraints[k].solve();
 
+        distanceConstraints.RemoveAll(c => c.lambda > tearingThreshold);
+
+    }
     private void updateVelocities()
     {
         foreach (Particle p in particles)
@@ -93,36 +93,6 @@ public class XPBDSolver : MonoBehaviour
             p.velocity = newVel;
         }
     }
-    private void shuffleOrderOfConstraints()
-    {
-        //Shuffle indices is faster than shuffling constraints directly
-        int n = order.Length;
-        for (int i = 0; i < n; i++)
-        {
-            int j = rng.Next(i, n);
-            int tmp = order[i];
-            order[i] = order[j];
-            order[j] = tmp;
-        }
-
-        for (int i = distanceConstraints.Count - 1; i > 0; i--)
-        {
-            int j = rng.Next(i + 1);
-            var tmpC = distanceConstraints[i];
-            distanceConstraints[i] = distanceConstraints[j];
-            distanceConstraints[j] = tmpC;
-        }
-
-        for (int i = collisionConstraints.Count - 1; i > 0; i--)
-        {
-            int j = rng.Next(i + 1);
-            var tmpC = collisionConstraints[i];
-            collisionConstraints[i] = collisionConstraints[j];
-            collisionConstraints[j] = tmpC;
-        }
-
-    }
-
     private void findCollisionsSubStep()
     {
         collisionConstraints.Clear();
@@ -146,6 +116,63 @@ public class XPBDSolver : MonoBehaviour
 
     }
 
+    private void shuffleOrderOfConstraints()
+    {
+        //Shuffle indices is faster than shuffling constraints directly
+
+        for (int i = collisionConstraints.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            var tmpC = collisionConstraints[i];
+            collisionConstraints[i] = collisionConstraints[j];
+            collisionConstraints[j] = tmpC;
+        }
+
+        for (int i = distanceConstraints.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            var tmpC = distanceConstraints[i];
+            distanceConstraints[i] = distanceConstraints[j];
+            distanceConstraints[j] = tmpC;
+        }
+
+        /*
+        int n = order.Length;
+        for (int i = 0; i < n; i++)
+        {
+            int j = rng.Next(i, n);
+            int tmp = order[i];
+            order[i] = order[j];
+            order[j] = tmp;
+        }
+
+        for (int i = distanceConstraints.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            var tmpC = distanceConstraints[i];
+            distanceConstraints[i] = distanceConstraints[j];
+            distanceConstraints[j] = tmpC;
+        }
+        */
+
+    }
+    private void transformWithParent()
+    {
+        foreach (Particle p in particles)
+        {
+            if (p.parent != null)
+            {
+                Vector3 parentPos = p.parentPosition;
+                Transform parentTransform = p.parent.transform;
+
+                Vector3 position = parentTransform.TransformPoint(parentPos);
+                p.positionX = position;
+            }
+        }
+    }
+
+
+
     private void registerCloth()
     {
         foreach (MultiphysicsCloth cloth in FindObjectsByType<MultiphysicsCloth>(FindObjectsSortMode.None))
@@ -163,11 +190,13 @@ public class XPBDSolver : MonoBehaviour
         if (showConstraints)
             renderDistanceConstraints();
 
-        foreach (MultiphysicsCloth cloth in cloths)
+        if (showCloths)
         {
-            cloth.renderClothSolid();
+            foreach (MultiphysicsCloth cloth in cloths)
+            {
+                cloth.renderClothSolid();
+            }
         }
-
     }
     private void renderParticles()
     {
