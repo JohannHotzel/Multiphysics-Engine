@@ -14,7 +14,6 @@ public class MultiphysicsCloth : MonoBehaviour
     public float radius = 0.1f;
     public bool shearConstraints = true;
     public bool fixTop = true;
-    public bool alwaysDrawGizmos = false;
     [HideInInspector] public Particle[,] particles;
 
     private Mesh clothMesh;
@@ -55,9 +54,9 @@ public class MultiphysicsCloth : MonoBehaviour
                     p.parent = parent;
                     p.parentPosition = parent.transform.InverseTransformPoint(position);
                     p.w = 0;
-                }                  
+                }
             }
-            
+
         }
 
         bool right = true;
@@ -207,6 +206,7 @@ public class MultiphysicsCloth : MonoBehaviour
 
                 Vector3 position = transform.TransformPoint(positionLocal);
                 Gizmos.DrawSphere(position, 0.05f);
+                Gizmos.DrawWireSphere(position, radius);
             }
         }
 
@@ -240,6 +240,7 @@ public class MultiphysicsCloth : MonoBehaviour
 
                 Vector3 position = transform.TransformPoint(positionLocal);
                 Gizmos.DrawSphere(position, 0.05f);
+                Gizmos.DrawWireSphere(position, radius);
             }
         }
     }

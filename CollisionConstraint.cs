@@ -11,8 +11,9 @@ public class CollisionConstraint : IConstraint
     float stiffness;
     float radius;
     XPBDSolver solver;
+    Rigidbody collidingRigidbody;
 
-    public CollisionConstraint(Particle p, Vector3 q, Vector3 n, float stiffness, float radius, XPBDSolver solver)
+    public CollisionConstraint(Particle p, Vector3 q, Vector3 n, float stiffness, float radius, XPBDSolver solver, Rigidbody collidingRigidbody)
     {
         this.p = p;
         this.q = q;
@@ -20,6 +21,7 @@ public class CollisionConstraint : IConstraint
         this.stiffness = stiffness;
         this.radius = radius;
         this.solver = solver;
+        this.collidingRigidbody = collidingRigidbody;
     }
 
     public void solve()
@@ -40,7 +42,14 @@ public class CollisionConstraint : IConstraint
         if (c >= 0f)
             return;
 
-        p.positionX += -c * n;
+
+        Vector3 displacement = -c * n;
+        p.positionX += displacement;
+
+        Vector3 impulse = displacement / solver.dts * p.m;
+        if (collidingRigidbody != null)
+            collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
+
     }
 
 }
