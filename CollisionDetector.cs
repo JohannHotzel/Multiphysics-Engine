@@ -50,6 +50,8 @@ public static class CollisionDetector
     }
     public static CollisionConstraint detectCollisionSubstepRadiusNormal(Particle p, Vector3 predictedPos, XPBDSolver solver)
     {
+        if (!p.solveForCollision) return null;
+
         Collider[] hits = Physics.OverlapSphere(predictedPos, p.radius * 1.1f);
         if (hits.Length == 0) return null;
         MeshCollider meshCollider = hits.FirstOrDefault(h => h is MeshCollider) as MeshCollider;

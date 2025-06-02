@@ -7,9 +7,8 @@ public class Particle
     public Vector3 velocity;
     public float m;
     public float w;
+    public bool solveForCollision = true;
     public float radius;
-    public GameObject parent;
-    public Vector3 parentPosition;
 
     //float radius;
     //Color color;

@@ -47,13 +47,15 @@ public class MultiphysicsCloth : MonoBehaviour
                 if (fixTop && j == numParticlesY - 1)
                     p.w = 0;
 
-                Collider[] hits = Physics.OverlapSphere(position, 0.01f);
+                Collider[] hits = Physics.OverlapSphere(position, radius);
                 if (hits.Length > 0)
                 {
                     GameObject parent = hits[0].gameObject;
-                    p.parent = parent;
-                    p.parentPosition = parent.transform.InverseTransformPoint(position);
-                    p.w = 0;
+                    Vector3 parentPosition = parent.transform.InverseTransformPoint(position);
+                    AttachmentConstraint atc = new AttachmentConstraint(p, parent, parentPosition, solver);
+                    solver.attachmentConstraints.Add(atc);
+                    //p.w = 0;
+                    p.solveForCollision = false;
                 }
             }
 

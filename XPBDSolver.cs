@@ -16,6 +16,7 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public List<Particle> particles;
     [HideInInspector] public List<DistanceConstraint> distanceConstraints;
     [HideInInspector] public List<CollisionConstraint> collisionConstraints;
+    [HideInInspector] public List<AttachmentConstraint> attachmentConstraints; 
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
     private System.Random rng = new System.Random();
@@ -42,6 +43,7 @@ public class XPBDSolver : MonoBehaviour
         particles = new List<Particle>();
         distanceConstraints = new List<DistanceConstraint>();
         collisionConstraints = new List<CollisionConstraint>();
+        attachmentConstraints = new List<AttachmentConstraint>();
         cloths = new List<MultiphysicsCloth>();
 
         registerCloth();
@@ -53,7 +55,6 @@ public class XPBDSolver : MonoBehaviour
 
     void FixedUpdate()
     {
-        transformWithParent();
         findCollisionsSubStep();
         shuffleOrderOfConstraints();
         for (int i = 0; i < substeps; i++)
@@ -83,6 +84,9 @@ public class XPBDSolver : MonoBehaviour
             distanceConstraints[k].solve();
 
         distanceConstraints.RemoveAll(c => c.lambda > tearingThreshold);
+
+        for (int k = 0; k < attachmentConstraints.Count; k++)
+            attachmentConstraints[k].solve();
 
     }
     private void updateVelocities()
@@ -156,23 +160,12 @@ public class XPBDSolver : MonoBehaviour
         */
 
     }
-    private void transformWithParent()
-    {
-        foreach (Particle p in particles)
-        {
-            if (p.parent != null)
-            {
-                Vector3 parentPos = p.parentPosition;
-                Transform parentTransform = p.parent.transform;
-
-                Vector3 position = parentTransform.TransformPoint(parentPos);
-                p.positionX = position;
-            }
-        }
-    }
 
 
 
+    //------------------------------------------------------------------------------------------------------------------------------------------//
+    //----------------- Register Physical Objects ----------------------------------------------------------------------------------------------//
+    //------------------------------------------------------------------------------------------------------------------------------------------//
     private void registerCloth()
     {
         foreach (MultiphysicsCloth cloth in FindObjectsByType<MultiphysicsCloth>(FindObjectsSortMode.None))
@@ -182,6 +175,10 @@ public class XPBDSolver : MonoBehaviour
         }
     }
 
+
+    //------------------------------------------------------------------------------------------------------------------------------------------//
+    //----------------- Rendering --------------------------------------------------------------------------------------------------------------//
+    //------------------------------------------------------------------------------------------------------------------------------------------//
     private void render()
     {
         if (showParticles)
