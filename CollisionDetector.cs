@@ -15,7 +15,7 @@ public static class CollisionDetector
         ClosestPoint cp = ClosestPointOnMesh.GetClosestPointOnMeshPlanes(meshCollider, predictedPos);
         if (cp == null || !cp.isInside) return null;
 
-        CollisionConstraint collisionConstraint = new CollisionConstraint(p, cp.point, cp.normal, 0, 0, solver, null);
+        CollisionConstraint collisionConstraint = new CollisionConstraint(p, cp.point, cp.normal, 0, solver, null);
         return collisionConstraint;
     }
     public static CollisionConstraint detectCollisionSubstepRadius(Particle p, Vector3 predictedPos, XPBDSolver solver)
@@ -34,7 +34,7 @@ public static class CollisionDetector
             Vector3 delta = cp.point - predictedPos;
             Vector3 normal = delta.normalized;
 
-            return new CollisionConstraint(p, cp.point, normal, 0, p.radius, solver, null);
+            return new CollisionConstraint(p, cp.point, normal, p.radius, solver, null);
         }
 
         else if (!cp.isInside)
@@ -43,7 +43,7 @@ public static class CollisionDetector
             if (delta.magnitude < p.radius)
             {
                 Vector3 normal = delta.normalized;
-                return new CollisionConstraint(p, cp.point, normal, 0, p.radius, solver, null);
+                return new CollisionConstraint(p, cp.point, normal, p.radius, solver, null);
             }
         }
         return null;
@@ -63,7 +63,7 @@ public static class CollisionDetector
 
         Rigidbody rb = meshCollider.attachedRigidbody;
 
-        return new CollisionConstraint(p, cp.point, cp.normal, 0, p.radius, solver, rb);
+        return new CollisionConstraint(p, cp.point, cp.normal, p.radius, solver, rb);
     }
 
 

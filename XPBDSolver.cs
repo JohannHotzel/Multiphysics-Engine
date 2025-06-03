@@ -26,14 +26,20 @@ public class XPBDSolver : MonoBehaviour
     public bool showParticles = true;
     public bool showConstraints = true;
     public bool showCloths = true;
+
+    //Draw Paricles
     public Mesh particleMesh;
     public Material particleMat;
     private Matrix4x4[] matrices;
     private const int batchSize = 1023;
-    public Material lineMaterial;                 // Unlit/Color-Shader
+    
+    //Draw Distance Constraints
+    public Material lineMaterial; // Unlit/Color-Shader
     private Mesh lineMesh;
     private Vector3[] verts;
     private int[] indices;
+
+
 
     void Start()
     {
@@ -97,6 +103,7 @@ public class XPBDSolver : MonoBehaviour
             p.velocity = newVel;
         }
     }
+
     private void findCollisionsSubStep()
     {
         collisionConstraints.Clear();
@@ -119,15 +126,12 @@ public class XPBDSolver : MonoBehaviour
         }
 
     }
-
     private void shuffleOrderOfConstraints()
     {
-        //Shuffle indices is faster than shuffling constraints directly
-
         for (int i = collisionConstraints.Count - 1; i > 0; i--)
         {
             int j = rng.Next(i + 1);
-            var tmpC = collisionConstraints[i];
+            CollisionConstraint tmpC = collisionConstraints[i];
             collisionConstraints[i] = collisionConstraints[j];
             collisionConstraints[j] = tmpC;
         }
@@ -135,30 +139,10 @@ public class XPBDSolver : MonoBehaviour
         for (int i = distanceConstraints.Count - 1; i > 0; i--)
         {
             int j = rng.Next(i + 1);
-            var tmpC = distanceConstraints[i];
+            DistanceConstraint tmpC = distanceConstraints[i];
             distanceConstraints[i] = distanceConstraints[j];
             distanceConstraints[j] = tmpC;
         }
-
-        /*
-        int n = order.Length;
-        for (int i = 0; i < n; i++)
-        {
-            int j = rng.Next(i, n);
-            int tmp = order[i];
-            order[i] = order[j];
-            order[j] = tmp;
-        }
-
-        for (int i = distanceConstraints.Count - 1; i > 0; i--)
-        {
-            int j = rng.Next(i + 1);
-            var tmpC = distanceConstraints[i];
-            distanceConstraints[i] = distanceConstraints[j];
-            distanceConstraints[j] = tmpC;
-        }
-        */
-
     }
 
 
@@ -219,7 +203,7 @@ public class XPBDSolver : MonoBehaviour
         int cCount = distanceConstraints.Count;
         if (lineMesh == null)
         {
-            lineMesh = new Mesh { name = "ConstraintLines" };
+            lineMesh = new Mesh();
             lineMesh.MarkDynamic();
         }
 

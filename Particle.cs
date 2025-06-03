@@ -10,9 +10,6 @@ public class Particle
     public bool solveForCollision = true;
     public float radius;
 
-    //float radius;
-    //Color color;
-
     public Particle(Vector3 position, float m, float radius)
     {
         this.positionP = position;
@@ -22,10 +19,4 @@ public class Particle
         this.w = m == 0 ? 0 : 1 / m;
         this.radius = radius;
     }
-
-
-
-
-
-
 }

@@ -5,15 +5,15 @@ using UnityEngine;
 public class MultiphysicsCloth : MonoBehaviour
 {
     [Header("Cloth Settings")]
-    public int numParticlesX = 10;
-    public int numParticlesY = 10;
-    public float width = 1f;
-    public float height = 1f;
-    public float particleMass = 1f;
-    public float stiffness = 1f;
-    public float radius = 0.1f;
-    public bool shearConstraints = true;
-    public bool fixTop = true;
+    public int numParticlesX;
+    public int numParticlesY;
+    public float width;
+    public float height;
+    public float particleMass;
+    public float stiffness;
+    public float radius;
+    public bool shearConstraints;
+    public bool fixTop;
     [HideInInspector] public Particle[,] particles;
 
     private Mesh clothMesh;
@@ -22,9 +22,9 @@ public class MultiphysicsCloth : MonoBehaviour
 
     void Awake()
     {
-        MeshFilter mf = GetComponent<MeshFilter>();
+        MeshFilter meshFilter = GetComponent<MeshFilter>();
         clothMesh = new Mesh();
-        mf.mesh = clothMesh;
+        meshFilter.mesh = clothMesh;
     }
 
     public void buildCloth(XPBDSolver solver)
@@ -44,8 +44,11 @@ public class MultiphysicsCloth : MonoBehaviour
                 particles[i, j] = p;
                 solver.particles.Add(p);
 
-                if (fixTop && j == numParticlesY - 1)
-                    p.w = 0;
+                if(fixTop && j == numParticlesY - 1)
+                {
+                    p.w = 0f;
+                    p.solveForCollision = false;
+                }
 
                 Collider[] hits = Physics.OverlapSphere(position, radius);
                 if (hits.Length > 0)
@@ -53,12 +56,10 @@ public class MultiphysicsCloth : MonoBehaviour
                     GameObject parent = hits[0].gameObject;
                     Vector3 parentPosition = parent.transform.InverseTransformPoint(position);
                     AttachmentConstraint atc = new AttachmentConstraint(p, parent, parentPosition, solver);
-                    solver.attachmentConstraints.Add(atc);
-                    //p.w = 0;
+                    solver.attachmentConstraints.Add(atc);              
                     p.solveForCollision = false;
                 }
             }
-
         }
 
         bool right = true;
@@ -94,7 +95,7 @@ public class MultiphysicsCloth : MonoBehaviour
                     {
                         Particle pd1 = particles[i + 1, j + 1];
                         solver.distanceConstraints.Add(new DistanceConstraint(p, pd1, stiffness, solver));
-                        right = false;
+                        right = !right;
                     }
 
                     else if (!right)
@@ -102,7 +103,7 @@ public class MultiphysicsCloth : MonoBehaviour
                         Particle pd2 = particles[i + 1, j];
                         Particle pd3 = particles[i, j + 1];
                         solver.distanceConstraints.Add(new DistanceConstraint(pd2, pd3, stiffness, solver));
-                        right = true;
+                        right = !right;
                     }
                 }
             }
@@ -116,6 +117,7 @@ public class MultiphysicsCloth : MonoBehaviour
             applyMeshData();
         }
     }
+
     public void renderClothSolid()
     {
         if (clothMesh == null || particles == null)
@@ -200,13 +202,14 @@ public class MultiphysicsCloth : MonoBehaviour
                 float x = i * width / (numParticlesX - 1);
                 float y = j * height / (numParticlesY - 1);
                 Vector3 positionLocal = new Vector3(x, y, 0);
+                Vector3 position = transform.TransformPoint(positionLocal);
 
-                if (fixTop && j == numParticlesY - 1)
+                if(fixTop && j == numParticlesY - 1)               
                     Gizmos.color = Color.red;
+                
                 else
                     Gizmos.color = Color.green;
-
-                Vector3 position = transform.TransformPoint(positionLocal);
+                
                 Gizmos.DrawSphere(position, 0.05f);
                 Gizmos.DrawWireSphere(position, radius);
             }
@@ -234,13 +237,14 @@ public class MultiphysicsCloth : MonoBehaviour
                 float x = i * width / (numParticlesX - 1);
                 float y = j * height / (numParticlesY - 1);
                 Vector3 positionLocal = new Vector3(x, y, 0);
+                Vector3 position = transform.TransformPoint(positionLocal);
 
-                if (fixTop && j == numParticlesY - 1)
+                if(fixTop && j == numParticlesY - 1)               
                     Gizmos.color = Color.red;
+                
                 else
                     Gizmos.color = Color.green;
 
-                Vector3 position = transform.TransformPoint(positionLocal);
                 Gizmos.DrawSphere(position, 0.05f);
                 Gizmos.DrawWireSphere(position, radius);
             }
