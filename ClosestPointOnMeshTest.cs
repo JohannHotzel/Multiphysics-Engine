@@ -14,6 +14,8 @@ public class ClosestPointOnMeshTest : MonoBehaviour
     public float maxDistance = 0.1f;
     private Vector3 intersectionPoint;
 
+    public Vector3 testVector;
+
 
 
     void Start()
@@ -30,6 +32,22 @@ public class ClosestPointOnMeshTest : MonoBehaviour
 
 
 
+        Vector3 t1;
+        if (Mathf.Abs(testVector.x) > 0.7071f)
+        {
+            t1 = new Vector3(testVector.y, -testVector.x, 0f).normalized;
+        }
+        else
+        {
+            t1 = new Vector3(0f, testVector.z, -testVector.y).normalized;
+        }
+        Vector3 t2 = Vector3.Cross(testVector, t1);
+
+        Debug.DrawLine(Vector3.zero, t1 * 0.5f, Color.blue);
+        Debug.DrawLine(Vector3.zero, t2 * 0.5f, Color.green);
+        Debug.DrawLine(Vector3.zero, testVector * 0.5f, Color.yellow);
+
+
     }
 
     void OnDrawGizmos()
@@ -39,6 +57,10 @@ public class ClosestPointOnMeshTest : MonoBehaviour
 
         Gizmos.color = Color.green;
         Gizmos.DrawSphere(closestPoint, 0.1f);
+
+
+
+
 
     }
 

@@ -10,6 +10,7 @@ public class XPBDSolver : MonoBehaviour
     public int substeps = 10;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
     public float vMax;
+    public float mu;
     public float tearingThreshold = 0.1f;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
