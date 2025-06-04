@@ -5,6 +5,7 @@ using static ClosestPointOnMesh;
 
 public static class CollisionDetector
 {
+    //Will be removed
     public static CollisionConstraint detectCollisionSubstep(Particle p, Vector3 predictedPos, XPBDSolver solver)
     {
         Collider[] hits = Physics.OverlapSphere(predictedPos, 0.1f);
@@ -18,6 +19,8 @@ public static class CollisionDetector
         CollisionConstraint collisionConstraint = new CollisionConstraint(p, cp.point, cp.normal, 0, solver, null);
         return collisionConstraint;
     }
+
+    //Will be removed
     public static CollisionConstraint detectCollisionSubstepRadius(Particle p, Vector3 predictedPos, XPBDSolver solver)
     {
         Collider[] hits = Physics.OverlapSphere(predictedPos, p.radius * 1.1f);
@@ -48,6 +51,7 @@ public static class CollisionDetector
         }
         return null;
     }
+
     public static CollisionConstraint detectCollisionSubstepRadiusNormal(Particle p, Vector3 predictedPos, XPBDSolver solver)
     {
         if (!p.solveForCollision) return null;
