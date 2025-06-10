@@ -14,6 +14,7 @@ public class MultiphysicsCloth : MonoBehaviour
     public float radius;
     public bool shearConstraints;
     public bool fixTop;
+    public Material clothMaterial;
     [HideInInspector] public Particle[,] particles;
 
     private Mesh clothMesh;
@@ -25,6 +26,9 @@ public class MultiphysicsCloth : MonoBehaviour
         MeshFilter meshFilter = GetComponent<MeshFilter>();
         clothMesh = new Mesh();
         meshFilter.mesh = clothMesh;
+
+        MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
+        meshRenderer.material = clothMaterial;
     }
 
     public void buildCloth(XPBDSolver solver)
