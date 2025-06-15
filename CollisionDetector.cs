@@ -70,6 +70,33 @@ public static class CollisionDetector
         return new CollisionConstraint(p, cp.point, cp.normal, p.radius, solver, rb);
     }
 
+    /*
+    public static List<CollisionConstraint> detectCollisionsSubstepRadiusNormal(Particle p, Vector3 predictedPos, XPBDSolver solver)
+    {
+        if (!p.solveForCollision) return null;
+
+        Collider[] hits = Physics.OverlapSphere(predictedPos, p.radius * 1.1f);
+        if (hits.Length == 0) return null;
+        MeshCollider meshCollider = hits.FirstOrDefault(h => h is MeshCollider) as MeshCollider;
+        if (meshCollider == null) return null;
+
+
+        List<ClosestPoint> cps = ClosestPointOnMesh.GetClosestPointsOnMeshNormal(meshCollider, predictedPos, solver.collisionMargin * p.radius);
+        if (cps == null) return null;
+
+        //Rigidbody rb = meshCollider.attachedRigidbody;
+
+        List<CollisionConstraint> collisionConstraints = new List<CollisionConstraint>();
+        foreach (ClosestPoint cp in cps)
+        {
+            collisionConstraints.Add(new CollisionConstraint(p, cp.point, cp.normal, p.radius, solver, null));
+        }
+
+        return collisionConstraints;
+
+    }
+    */
+
 
 }
 

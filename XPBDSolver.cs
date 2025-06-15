@@ -10,6 +10,7 @@ public class XPBDSolver : MonoBehaviour
     public int substeps = 10;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
     public float vMax;
+    //public float collisionMargin = 0.1f;
     public float mu;
     public float tearingThreshold = 0.1f;
     [HideInInspector] public float dts;
@@ -120,9 +121,16 @@ public class XPBDSolver : MonoBehaviour
 
             //CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstep(p, pos, GetComponent<XPBDSolver>());
             //CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadius(p, pos, GetComponent<XPBDSolver>());
+
             CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadiusNormal(p, pos, GetComponent<XPBDSolver>());
             if (collisionConstraint != null)
                 collisionConstraints.Add(collisionConstraint);
+
+            //List<CollisionConstraint> constraints = CollisionDetector.detectCollisionsSubstepRadiusNormal(p, pos, GetComponent<XPBDSolver>());
+
+            //if(constraints != null && constraints.Count > 0)
+            //    collisionConstraints.AddRange(constraints);
+
 
         }
 

@@ -16,7 +16,10 @@ public class ClosestPointOnMeshTest : MonoBehaviour
 
     public Vector3 testVector;
 
+    public float margin;
 
+
+    List<ClosestPoint> cloasestPoints = new List<ClosestPoint>();
 
     void Start()
     {
@@ -25,13 +28,13 @@ public class ClosestPointOnMeshTest : MonoBehaviour
 
     void Update()
     {
+        /*
         ClosestPoint cp = ClosestPointOnMesh.GetClosestPointOnMeshNormal(meshCollider, point);
         closestPoint = cp.point;
         Vector3 normal = cp.normal;
         Debug.DrawLine(closestPoint, closestPoint + normal * 0.5f, Color.red);
-
-
-
+                        
+        //Normals of Vector3
         Vector3 t1;
         if (Mathf.Abs(testVector.x) > 0.7071f)
         {
@@ -46,21 +49,29 @@ public class ClosestPointOnMeshTest : MonoBehaviour
         Debug.DrawLine(Vector3.zero, t1 * 0.5f, Color.blue);
         Debug.DrawLine(Vector3.zero, t2 * 0.5f, Color.green);
         Debug.DrawLine(Vector3.zero, testVector * 0.5f, Color.yellow);
+        */
 
+        cloasestPoints = ClosestPointOnMesh.GetClosestPointsOnMeshNormal(meshCollider, point, margin);
 
     }
 
     void OnDrawGizmos()
     {
+        
         Gizmos.color = Color.red;
         Gizmos.DrawSphere(point, 0.05f);
 
+        /*
         Gizmos.color = Color.green;
         Gizmos.DrawSphere(closestPoint, 0.1f);
+        */
 
-
-
-
+        foreach (ClosestPoint cp in cloasestPoints)
+        {
+            Gizmos.color = Color.green;
+            Gizmos.DrawSphere(cp.point, 0.05f);
+            Gizmos.DrawLine(cp.point, cp.point + cp.normal * 0.1f);
+        }
 
     }
 

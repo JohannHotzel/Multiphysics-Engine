@@ -164,6 +164,63 @@ public class ClosestPointOnMesh
         };
     }
 
+    //Returns a list of closest points on the mesh with the correct normal
+    public static List<ClosestPoint> GetClosestPointsOnMeshNormal(MeshCollider meshCollider, Vector3 point, float margin)
+    {
+        Mesh mesh = meshCollider.sharedMesh;
+        Vector3[] verts = mesh.vertices;
+        Vector3[] norms = mesh.normals;
+        Vector3[] averagedNormals = GetAveragedNormals(verts, norms);
+        int[] tris = mesh.triangles;
+        Transform tr = meshCollider.transform;
+
+        var resultList = new List<ClosestPoint>();
+
+        Vector3 GetVertexNormal(int idx)
+            => tr.TransformDirection(averagedNormals[idx]).normalized;
+
+        for (int i = 0; i < tris.Length; i += 3)
+        {
+            int i0 = tris[i], i1 = tris[i + 1], i2 = tris[i + 2];
+            Vector3 a = tr.TransformPoint(verts[i0]);
+            Vector3 b = tr.TransformPoint(verts[i1]);
+            Vector3 c = tr.TransformPoint(verts[i2]);
+
+            Vector3 faceN = Vector3.Cross(b - a, c - a).normalized;
+            float signedDist = Vector3.Dot(faceN, point - a);
+            Vector3 proj = point - signedDist * faceN;
+
+            if (IsPointInTriangle(proj, a, b, c))
+            {
+                resultList.Add(new ClosestPoint
+                {
+                    point = proj,
+                    normal = faceN,
+                    distance = Mathf.Abs(signedDist)
+                });
+            }
+
+            AddEdgeClosestPoint(a, b, i0, i1, point, resultList, GetVertexNormal);
+            AddEdgeClosestPoint(b, c, i1, i2, point, resultList, GetVertexNormal);
+            AddEdgeClosestPoint(c, a, i2, i0, point, resultList, GetVertexNormal);
+        }
+
+        resultList.Sort((a, b) => a.distance.CompareTo(b.distance));
+
+        float minDist = resultList[0].distance;
+        for (int i = resultList.Count - 1; i >= 1; i--)
+        {
+            if (resultList[i].distance > margin)
+            {
+                resultList.RemoveAt(i);
+            }
+        }
+
+        return resultList;
+    }
+
+
+
     //---------------------------------- UTILS: (Returns a single closest point) -----------------------------------------------------------------//
     private static bool IsPointInTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
     {
@@ -222,6 +279,26 @@ public class ClosestPointOnMesh
             }
         }
     }
+    private static void AddEdgeClosestPoint(Vector3 a, Vector3 b, int ia, int ib, Vector3 p, List<ClosestPoint> resultList, System.Func<int, Vector3> getVertNormal)
+    {
+        Vector3 ab = b - a;
+        float t = Vector3.Dot(p - a, ab) / Vector3.Dot(ab, ab);
+        t = Mathf.Clamp01(t);
+        Vector3 cand = a + ab * t;
+        float d = Vector3.Distance(p, cand);
+
+        Vector3 na = getVertNormal(ia);
+        Vector3 nb = getVertNormal(ib);
+        Vector3 interpolatedNormal = t == 0 || t == 1 ? Vector3.Lerp(na, nb, t).normalized : (na + nb).normalized;
+
+        resultList.Add(new ClosestPoint
+        {
+            point = cand,
+            normal = interpolatedNormal,
+            distance = d
+        });
+    }
+
     public static Vector3[] GetAveragedNormals(Vector3[] verts, Vector3[] norms)
     {
         int n = verts.Length;
