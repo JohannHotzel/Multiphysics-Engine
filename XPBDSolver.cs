@@ -8,6 +8,7 @@ public class XPBDSolver : MonoBehaviour
     [Header("Simulation Settings")]
     public float dt = 0.02f;
     public int substeps = 10;
+    public int iterations = 5;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
     public float vMax;
     //public float collisionMargin = 0.1f;
@@ -85,16 +86,14 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
-        for (int k = 0; k < collisionConstraints.Count; k++)
-            collisionConstraints[k].solve();
-
-        for (int k = 0; k < distanceConstraints.Count; k++)
-            distanceConstraints[k].solve();
+        for(int i = 0; i < iterations; i++)
+        {
+            foreach (var cc in collisionConstraints) cc.solve();
+            foreach (var dc in distanceConstraints) dc.solve();
+            foreach (var ac in attachmentConstraints) ac.solve();
+        }
 
         distanceConstraints.RemoveAll(c => c.lambda > tearingThreshold);
-
-        for (int k = 0; k < attachmentConstraints.Count; k++)
-            attachmentConstraints[k].solve();
 
     }
     private void updateVelocities()
@@ -105,7 +104,6 @@ public class XPBDSolver : MonoBehaviour
             p.velocity = newVel;
         }
     }
-
     private void findCollisionsSubStep()
     {
         collisionConstraints.Clear();
@@ -133,7 +131,6 @@ public class XPBDSolver : MonoBehaviour
 
 
         }
-
     }
     private void shuffleOrderOfConstraints()
     {
