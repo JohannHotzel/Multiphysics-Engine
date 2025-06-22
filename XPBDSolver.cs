@@ -65,16 +65,15 @@ public class XPBDSolver : MonoBehaviour
 
     void FixedUpdate()
     {
-        findCollisionsSubStep();
-
-        combinedConstraints = new List<IConstraint>(collisionConstraints.Count + distanceConstraints.Count);
-        combinedConstraints.AddRange(collisionConstraints);
-        combinedConstraints.AddRange(distanceConstraints);
+        //findCollisionsOutsideSubStep();
+        combinedConstraints = new List<IConstraint>(distanceConstraints);
         ShuffleConstraints(combinedConstraints);
 
+       
         for (int i = 0; i < substeps; i++)
         {
             integrate();
+            findCollisionsInsideSubStep();
             solveConstraints();
             updateVelocities();
         }
@@ -95,6 +94,7 @@ public class XPBDSolver : MonoBehaviour
         for(int i = 0; i < iterations; i++)
         {
             foreach (var con in combinedConstraints) con.solve();
+            foreach (var con in collisionConstraints) con.solve();
             foreach (var ac in attachmentConstraints) ac.solve();
         }
 
@@ -109,7 +109,7 @@ public class XPBDSolver : MonoBehaviour
             p.velocity = newVel;
         }
     }
-    private void findCollisionsSubStep()
+    private void findCollisionsOutsideSubStep()
     {
         collisionConstraints.Clear();
 
@@ -128,6 +128,19 @@ public class XPBDSolver : MonoBehaviour
 
         }
     }
+    private void findCollisionsInsideSubStep()
+    {
+        collisionConstraints.Clear();
+
+        foreach (Particle p in particles)
+        {
+            if (p.w == 0) continue;
+
+            CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadiusNormal(p, p.positionX, GetComponent<XPBDSolver>());
+            if (collisionConstraint != null)
+                collisionConstraints.Add(collisionConstraint);
+        }
+    }
 
     private void ShuffleConstraints(List<IConstraint> list)
     {
@@ -139,6 +152,9 @@ public class XPBDSolver : MonoBehaviour
             list[j] = tmp;
         }
     }
+
+
+
 
 
     //------------------------------------------------------------------------------------------------------------------------------------------//

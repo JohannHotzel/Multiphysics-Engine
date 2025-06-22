@@ -9,7 +9,7 @@ public static class CollisionDetector
     {
         if (!p.solveForCollision) return null;
 
-        Collider[] hits = Physics.OverlapSphere(predictedPos, p.radius * 2f);
+        Collider[] hits = Physics.OverlapSphere(predictedPos, p.radius * 1.1f);
         if (hits.Length == 0) return null;
         MeshCollider meshCollider = hits.FirstOrDefault(h => h is MeshCollider) as MeshCollider;
         if (meshCollider == null) return null;
