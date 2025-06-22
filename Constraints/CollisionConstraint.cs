@@ -26,7 +26,8 @@ public class CollisionConstraint : IConstraint
     {
         if (p.w == 0) return;
 
-        float d = Vector3.Dot(p.positionX - q, n) - radius;
+        float bias = 0.01f;
+        float d = Vector3.Dot(p.positionX - q, n) - (radius + bias);
 
         float d0 = -d;
         if (d0 < 0f) d0 = 0f;
@@ -40,9 +41,9 @@ public class CollisionConstraint : IConstraint
         float deltaLambdaN = -c / w;
 
         Vector3 displacement = -c * n;
-        //p.positionX += displacement;
+        p.positionX += displacement;
 
-
+        /*
         //Friction
         Vector3 t1;
         if (Mathf.Abs(n.x) > 0.7071f)
@@ -87,12 +88,8 @@ public class CollisionConstraint : IConstraint
         Vector3 impulse = completeCorrection / solver.dts * p.m;
         if (collidingRigidbody != null)
             collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
+        */
+
     }
 
 }
-
-/*
-Vector3 impulse = displacement / solver.dts * p.m;
-if (collidingRigidbody != null)
-    collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
-*/

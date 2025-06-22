@@ -51,7 +51,7 @@ public class ClosestPointOnMeshTest : MonoBehaviour
         Debug.DrawLine(Vector3.zero, testVector * 0.5f, Color.yellow);
         */
 
-        cloasestPoints = ClosestPointOnMesh.GetClosestPointsOnMeshNormal(meshCollider, point, margin);
+        //cloasestPoints = ClosestPointOnMesh.GetClosestPointsOnMeshNormal(meshCollider, point, margin);
 
     }
 

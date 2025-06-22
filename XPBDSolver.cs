@@ -22,6 +22,7 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public List<AttachmentConstraint> attachmentConstraints; 
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
+    private List<IConstraint> combinedConstraints;
     private System.Random rng = new System.Random();
 
 
@@ -65,7 +66,12 @@ public class XPBDSolver : MonoBehaviour
     void FixedUpdate()
     {
         findCollisionsSubStep();
-        shuffleOrderOfConstraints();
+
+        combinedConstraints = new List<IConstraint>(collisionConstraints.Count + distanceConstraints.Count);
+        combinedConstraints.AddRange(collisionConstraints);
+        combinedConstraints.AddRange(distanceConstraints);
+        ShuffleConstraints(combinedConstraints);
+
         for (int i = 0; i < substeps; i++)
         {
             integrate();
@@ -88,8 +94,7 @@ public class XPBDSolver : MonoBehaviour
     {
         for(int i = 0; i < iterations; i++)
         {
-            foreach (var cc in collisionConstraints) cc.solve();
-            foreach (var dc in distanceConstraints) dc.solve();
+            foreach (var con in combinedConstraints) con.solve();
             foreach (var ac in attachmentConstraints) ac.solve();
         }
 
@@ -117,40 +122,23 @@ public class XPBDSolver : MonoBehaviour
             Vector3 velocity = p.velocity + acceleration * dt;
             Vector3 pos = p.positionX + velocity * dt;
 
-            //CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstep(p, pos, GetComponent<XPBDSolver>());
-            //CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadius(p, pos, GetComponent<XPBDSolver>());
-
             CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadiusNormal(p, pos, GetComponent<XPBDSolver>());
             if (collisionConstraint != null)
                 collisionConstraints.Add(collisionConstraint);
 
-            //List<CollisionConstraint> constraints = CollisionDetector.detectCollisionsSubstepRadiusNormal(p, pos, GetComponent<XPBDSolver>());
-
-            //if(constraints != null && constraints.Count > 0)
-            //    collisionConstraints.AddRange(constraints);
-
-
         }
     }
-    private void shuffleOrderOfConstraints()
+
+    private void ShuffleConstraints(List<IConstraint> list)
     {
-        for (int i = collisionConstraints.Count - 1; i > 0; i--)
+        for (int i = list.Count - 1; i > 0; i--)
         {
             int j = rng.Next(i + 1);
-            CollisionConstraint tmpC = collisionConstraints[i];
-            collisionConstraints[i] = collisionConstraints[j];
-            collisionConstraints[j] = tmpC;
-        }
-
-        for (int i = distanceConstraints.Count - 1; i > 0; i--)
-        {
-            int j = rng.Next(i + 1);
-            DistanceConstraint tmpC = distanceConstraints[i];
-            distanceConstraints[i] = distanceConstraints[j];
-            distanceConstraints[j] = tmpC;
+            var tmp = list[i];
+            list[i] = list[j];
+            list[j] = tmp;
         }
     }
-
 
 
     //------------------------------------------------------------------------------------------------------------------------------------------//
