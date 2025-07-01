@@ -28,13 +28,13 @@ public class DistanceConstraint : IConstraint
         float alpha = stiffness / solver.dts2;
 
         float c = currentLength - restLength;
-        lambda = c / (p1.w + p2.w + alpha);
+        lambda = (-c - alpha * lambda) / (p1.w + p2.w + alpha);
 
         if (p1.w != 0)
-            p1.positionX += direction * lambda * p1.w;
+            p1.positionX -= direction * lambda * p1.w;
 
         if (p2.w != 0)
-            p2.positionX -= direction * lambda * p2.w;
+            p2.positionX += direction * lambda * p2.w;
 
     }
 

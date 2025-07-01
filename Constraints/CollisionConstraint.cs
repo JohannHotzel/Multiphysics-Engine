@@ -27,7 +27,7 @@ public class CollisionConstraint : IConstraint
         if (p.w == 0) return;
 
 
-        float bias = 0.01f;        
+        float bias = 0.001f;        
         float d = Vector3.Dot(p.positionX - q, n) - (radius + bias);
 
         float d0 = -d;
@@ -36,6 +36,7 @@ public class CollisionConstraint : IConstraint
         float clamp = Mathf.Max(d0 - solver.vMax * solver.dts, 0f);
 
         float c = d + clamp;
+
         if (c >= 0f) return;
 
         float w = p.w;

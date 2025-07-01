@@ -11,7 +11,6 @@ public class XPBDSolver : MonoBehaviour
     public int iterations = 5;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
     public float vMax;
-    //public float collisionMargin = 0.1f;
     public float mu;
     public float tearingThreshold = 0.1f;
     [HideInInspector] public float dts;
@@ -22,7 +21,6 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public List<AttachmentConstraint> attachmentConstraints; 
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
-    private List<IConstraint> combinedConstraints;
     private System.Random rng = new System.Random();
 
 
@@ -65,11 +63,8 @@ public class XPBDSolver : MonoBehaviour
 
     void FixedUpdate()
     {
-        //findCollisionsOutsideSubStep();
-        combinedConstraints = new List<IConstraint>(distanceConstraints);
-        ShuffleConstraints(combinedConstraints);
+        ShuffleDistanceConstraints(distanceConstraints);
 
-       
         for (int i = 0; i < substeps; i++)
         {
             integrate();
@@ -93,7 +88,7 @@ public class XPBDSolver : MonoBehaviour
     {
         for(int i = 0; i < iterations; i++)
         {
-            foreach (var con in combinedConstraints) con.solve();
+            foreach (var con in distanceConstraints) con.solve();
             foreach (var con in collisionConstraints) con.solve();
             foreach (var ac in attachmentConstraints) ac.solve();
         }
@@ -152,7 +147,16 @@ public class XPBDSolver : MonoBehaviour
             list[j] = tmp;
         }
     }
-
+    private void ShuffleDistanceConstraints(List<DistanceConstraint> list)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            var tmp = list[i];
+            list[i] = list[j];
+            list[j] = tmp;
+        }
+    }
 
 
 
