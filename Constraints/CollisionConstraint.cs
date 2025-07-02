@@ -45,6 +45,10 @@ public class CollisionConstraint : IConstraint
         Vector3 displacement = -c * n;
         p.positionX += displacement;
 
+        Vector3 impulse = displacement / solver.dts * p.m;
+        if (collidingRigidbody != null)
+            collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
+
         /*
         //Friction
         Vector3 t1;
@@ -87,9 +91,7 @@ public class CollisionConstraint : IConstraint
         p.positionX += completeCorrection;
 
 
-        Vector3 impulse = completeCorrection / solver.dts * p.m;
-        if (collidingRigidbody != null)
-            collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
+
         */
 
     }
