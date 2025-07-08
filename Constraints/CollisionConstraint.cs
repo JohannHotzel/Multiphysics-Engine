@@ -41,16 +41,9 @@ public class CollisionConstraint : IConstraint
 
         float w = p.w;
         float deltaLambdaN = -c / w;
-
         Vector3 displacement = -c * n;
-        p.positionX += displacement;
 
-        Vector3 impulse = displacement / solver.dts * p.m;
-        if (collidingRigidbody != null)
-            collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
 
-        /*
-        //Friction
         Vector3 t1;
         if (Mathf.Abs(n.x) > 0.7071f)
         {
@@ -62,9 +55,6 @@ public class CollisionConstraint : IConstraint
         }
 
         Vector3 t2 = Vector3.Cross(n, t1).normalized;
-
-        //Vector3 xContact = q + radius * n;
-        //Vector3 xContact = q ;
 
         float Cf1 = Vector3.Dot(p.positionX - q, t1);
         float Cf2 = Vector3.Dot(p.positionX - q, t2);
@@ -85,14 +75,13 @@ public class CollisionConstraint : IConstraint
         float appliedf2 = clampedF.y;
 
         Vector3 correctionF = w * (appliedf1 * t1 + appliedf2 * t2);
-
         Vector3 completeCorrection = displacement + correctionF;
 
         p.positionX += completeCorrection;
 
-
-
-        */
+        Vector3 impulse = completeCorrection / solver.dts * p.m;
+        if (collidingRigidbody != null)
+            collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
 
     }
 
