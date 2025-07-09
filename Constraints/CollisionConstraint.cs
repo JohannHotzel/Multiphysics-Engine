@@ -1,4 +1,4 @@
-using Unity.Mathematics;
+﻿using Unity.Mathematics;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,6 +11,10 @@ public class CollisionConstraint : IConstraint
     float radius;
     XPBDSolver solver;
     Rigidbody collidingRigidbody;
+
+    float lambdaN = 0f;
+    float lambdaF1 = 0f;
+    float lambdaF2 = 0f;
 
     public CollisionConstraint(Particle p, Vector3 q, Vector3 n, float radius, XPBDSolver solver, Rigidbody collidingRigidbody)
     {
@@ -42,47 +46,56 @@ public class CollisionConstraint : IConstraint
         float w = p.w;
         float deltaLambdaN = -c / w;
         Vector3 displacement = -c * n;
+        p.positionX += displacement;
 
-
-        Vector3 t1;
-        if (Mathf.Abs(n.x) > 0.7071f)
-        {
-            t1 = new Vector3(n.y, -n.x, 0f).normalized;
-        }
-        else
-        {
-            t1 = new Vector3(0f, n.z, -n.y).normalized;
-        }
-
-        Vector3 t2 = Vector3.Cross(n, t1).normalized;
-
-        float Cf1 = Vector3.Dot(p.positionX - q, t1);
-        float Cf2 = Vector3.Dot(p.positionX - q, t2);
-        float deltaLambdaF1 = -Cf1 / w;
-        float deltaLambdaF2 = -Cf2 / w;
-
-        Vector2 rawF = new Vector2(deltaLambdaF1, deltaLambdaF2);
-        float maxFric = solver.mu * -deltaLambdaN;
-        Vector2 clampedF;
-
-        if (rawF.magnitude > maxFric)
-            clampedF = rawF.normalized * maxFric;
-
-        else
-            clampedF = rawF;
-
-        float appliedf1 = clampedF.x;
-        float appliedf2 = clampedF.y;
-
-        Vector3 correctionF = w * (appliedf1 * t1 + appliedf2 * t2);
-        Vector3 completeCorrection = displacement + correctionF;
-
-        p.positionX += completeCorrection;
-
-        Vector3 impulse = completeCorrection / solver.dts * p.m;
+        Vector3 impulse = displacement / solver.dts * p.m;
         if (collidingRigidbody != null)
             collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
 
     }
 
 }
+
+
+
+
+/*
+Vector3 t1;
+if (Mathf.Abs(n.x) > 0.7071f)
+{
+    t1 = new Vector3(n.y, -n.x, 0f).normalized;
+}
+else
+{
+    t1 = new Vector3(0f, n.z, -n.y).normalized;
+}
+
+Vector3 t2 = Vector3.Cross(n, t1).normalized;
+
+float Cf1 = Vector3.Dot(p.positionX - q, t1);
+float Cf2 = Vector3.Dot(p.positionX - q, t2);
+float deltaLambdaF1 = -Cf1 / w;
+float deltaLambdaF2 = -Cf2 / w;
+
+Vector2 rawF = new Vector2(deltaLambdaF1, deltaLambdaF2);
+float maxFric = solver.mu * -deltaLambdaN;
+Vector2 clampedF;
+
+if (rawF.magnitude > maxFric)
+    clampedF = rawF.normalized * maxFric;
+
+else
+    clampedF = rawF;
+
+float appliedf1 = clampedF.x;
+float appliedf2 = clampedF.y;
+
+Vector3 correctionF = w * (appliedf1 * t1 + appliedf2 * t2);
+Vector3 completeCorrection = displacement + correctionF;
+
+p.positionX += completeCorrection;
+
+Vector3 impulse = completeCorrection / solver.dts * p.m;
+if (collidingRigidbody != null)
+    collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
+*/
