@@ -49,8 +49,35 @@ public static class CollisionDetector
         //------- CapsuleCollider ------------------------------------------------------------------------------
         else if (col is CapsuleCollider capCol)
         {
-            point = Vector3.zero;
-            normal = Vector3.up;
+            Vector3 worldCenter = capCol.transform.TransformPoint(capCol.center);
+            Vector3 worldUp = capCol.transform.up;
+
+            float radius = capCol.radius * Mathf.Max(
+                capCol.transform.lossyScale.x,
+                capCol.transform.lossyScale.z
+            );
+            float height = Mathf.Max(
+                capCol.height * capCol.transform.lossyScale.y,
+                2f * radius
+            );
+
+            float halfSegment = (height * 0.5f) - radius;
+
+            Vector3 p1 = worldCenter + worldUp * halfSegment;
+            Vector3 p2 = worldCenter - worldUp * halfSegment;
+
+            Vector3 d = p2 - p1;
+            float t = Vector3.Dot(predictedPos - p1, d) / Vector3.Dot(d, d);
+            t = Mathf.Clamp01(t);
+            Vector3 closestOnSegment = p1 + d * t;
+
+            Vector3 dir = predictedPos - closestOnSegment;
+            float dist = dir.magnitude;
+            if (dist > radius + p.radius)
+                return null;
+
+            normal = dir.normalized;
+            point = closestOnSegment + normal * radius;
         }
 
         //------- Else -----------------------------------------------------------------------------------------
