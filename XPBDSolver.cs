@@ -64,11 +64,12 @@ public class XPBDSolver : MonoBehaviour
     void FixedUpdate()
     {
         ShuffleDistanceConstraints(distanceConstraints);
+        findCollisionsOutsideSubStep();
 
         for (int i = 0; i < substeps; i++)
         {
             integrate();
-            findCollisionsInsideSubStep();
+            //findCollisionsInsideSubStep();
             solveConstraints();
             updateVelocities();
         }
