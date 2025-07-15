@@ -95,7 +95,6 @@ public class XPBDSolver : MonoBehaviour
         }
 
         distanceConstraints.RemoveAll(c => c.lambda > tearingThreshold);
-
     }
     private void updateVelocities()
     {
