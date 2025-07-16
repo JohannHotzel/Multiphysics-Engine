@@ -17,6 +17,7 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
     [HideInInspector] public List<DistanceConstraint> distanceConstraints;
+    [HideInInspector] public List<DistanceConstraint> brokenDistanceConstraints;
     [HideInInspector] public List<CollisionConstraint> collisionConstraints;
     [HideInInspector] public List<AttachmentConstraint> attachmentConstraints; 
     [HideInInspector] public List<MultiphysicsCloth> cloths;
@@ -189,7 +190,7 @@ public class XPBDSolver : MonoBehaviour
         {
             foreach (MultiphysicsCloth cloth in cloths)
             {
-                cloth.renderClothSolid();
+                cloth.renderClothSolid(this);
             }
         }
     }

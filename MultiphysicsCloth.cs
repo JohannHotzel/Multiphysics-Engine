@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
@@ -19,6 +20,13 @@ public class MultiphysicsCloth : MonoBehaviour
     private Mesh clothMesh;
     private Vector3[] vertices;
     private int[] triangles;
+
+    private Dictionary<DistanceConstraint, (int i1, int j1, int i2, int j2)> constraintMap
+        = new Dictionary<DistanceConstraint, (int, int, int, int)>();
+
+    private HashSet<(int, int, int, int)> brokenEdges
+        = new HashSet<(int, int, int, int)>();
+
 
     void Awake()
     {
@@ -77,6 +85,7 @@ public class MultiphysicsCloth : MonoBehaviour
                     var pr = particles[i + 1, j];
                     var c = new DistanceConstraint(p, pr, stiffness, solver);
                     solver.distanceConstraints.Add(c);
+                    constraintMap[c] = (i, j, i + 1, j);
                 }
 
                 if (j + 1 < numParticlesY)
@@ -84,6 +93,7 @@ public class MultiphysicsCloth : MonoBehaviour
                     var pu = particles[i, j + 1];
                     var c = new DistanceConstraint(p, pu, stiffness, solver);
                     solver.distanceConstraints.Add(c);
+                    constraintMap[c] = (i, j, i, j + 1);
                 }
 
                 if (!shearConstraints)
@@ -94,7 +104,9 @@ public class MultiphysicsCloth : MonoBehaviour
                     if (right)
                     {
                         Particle pd1 = particles[i + 1, j + 1];
-                        solver.distanceConstraints.Add(new DistanceConstraint(p, pd1, stiffness, solver));
+                        var c = new DistanceConstraint(p, pd1, stiffness, solver);
+                        solver.distanceConstraints.Add(c);
+                        constraintMap[c] = (i, j, i + 1, j + 1);
                         right = !right;
                     }
 
@@ -102,7 +114,9 @@ public class MultiphysicsCloth : MonoBehaviour
                     {
                         Particle pd2 = particles[i + 1, j];
                         Particle pd3 = particles[i, j + 1];
-                        solver.distanceConstraints.Add(new DistanceConstraint(pd2, pd3, stiffness, solver));
+                        var c = new DistanceConstraint(pd2, pd3, stiffness, solver);
+                        solver.distanceConstraints.Add(c);
+                        constraintMap[c] = (i + 1, j, i, j + 1);
                         right = !right;
                     }
                 }
@@ -118,23 +132,32 @@ public class MultiphysicsCloth : MonoBehaviour
         }
     }
 
-    public void renderClothSolid()
+    public void renderClothSolid(XPBDSolver solver)
     {
         if (clothMesh == null || particles == null)
             return;
 
-        updateMeshVertices();
-        clothMesh.vertices = vertices;
-        clothMesh.RecalculateNormals();
-        clothMesh.RecalculateBounds();
+        if (solver.brokenDistanceConstraints.Count > 0)
+        {
+            foreach (var d in solver.brokenDistanceConstraints)
+            {
+                if (constraintMap.TryGetValue(d, out var coords))
+                {
+                    MarkEdgeBroken(coords.i1, coords.j1, coords.i2, coords.j2);
+                    constraintMap.Remove(d);
+                }
+            }
+            solver.brokenDistanceConstraints.Clear();
+
+            updateMeshVertices();
+            buildTriangles();
+            applyMeshData();
+        }
     }
     private void initializeMeshData()
     {
-        int numVerts = numParticlesX * numParticlesY;
-        vertices = new Vector3[numVerts];
-
-        int numQuads = (numParticlesX - 1) * (numParticlesY - 1);
-        triangles = new int[numQuads * 6];
+        vertices = new Vector3[numParticlesX * numParticlesY];
+        triangles = new int[(numParticlesX - 1) * (numParticlesY - 1) * 6];
     }
     private void updateMeshVertices()
     {
@@ -153,8 +176,10 @@ public class MultiphysicsCloth : MonoBehaviour
     private void buildTriangles()
     {
         int triIdx = 0;
+        int maxTris = (numParticlesX - 1) * (numParticlesY - 1) * 6;
+        var temp = new int[maxTris];
+
         for (int j = 0; j < numParticlesY - 1; j++)
-        {
             for (int i = 0; i < numParticlesX - 1; i++)
             {
                 int i0 = j * numParticlesX + i;
@@ -162,15 +187,28 @@ public class MultiphysicsCloth : MonoBehaviour
                 int i2 = (j + 1) * numParticlesX + i;
                 int i3 = (j + 1) * numParticlesX + (i + 1);
 
-                triangles[triIdx++] = i0;
-                triangles[triIdx++] = i2;
-                triangles[triIdx++] = i1;
+                bool b01 = EdgeBroken(i, j, i + 1, j);
+                bool b02 = EdgeBroken(i, j, i, j + 1);
+                bool b12 = EdgeBroken(i + 1, j, i, j + 1);
+                if (!b01 && !b02 && !b12)
+                {
+                    temp[triIdx++] = i0;
+                    temp[triIdx++] = i2;
+                    temp[triIdx++] = i1;
+                }
 
-                triangles[triIdx++] = i1;
-                triangles[triIdx++] = i2;
-                triangles[triIdx++] = i3;
+                bool b13 = EdgeBroken(i + 1, j, i + 1, j + 1);
+                bool b23 = EdgeBroken(i, j + 1, i + 1, j + 1);
+                if (!b12 && !b13 && !b23)
+                {
+                    temp[triIdx++] = i1;
+                    temp[triIdx++] = i2;
+                    temp[triIdx++] = i3;
+                }
             }
-        }
+
+        Array.Resize(ref temp, triIdx);
+        triangles = temp;
     }
     private void applyMeshData()
     {
@@ -178,6 +216,21 @@ public class MultiphysicsCloth : MonoBehaviour
         clothMesh.vertices = vertices;
         clothMesh.triangles = triangles;
         clothMesh.RecalculateNormals();
+        clothMesh.RecalculateBounds();
+    }
+
+    private bool EdgeBroken(int i1, int j1, int i2, int j2)
+    {
+        if (i1 > i2 || (i1 == i2 && j1 > j2))
+            (i1, j1, i2, j2) = (i2, j2, i1, j1);
+        return brokenEdges.Contains((i1, j1, i2, j2));
+    }
+
+    public void MarkEdgeBroken(int i1, int j1, int i2, int j2)
+    {
+        if (i1 > i2 || (i1 == i2 && j1 > j2))
+            (i1, j1, i2, j2) = (i2, j2, i1, j1);
+        brokenEdges.Add((i1, j1, i2, j2));
     }
 
 
