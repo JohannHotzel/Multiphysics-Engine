@@ -51,6 +51,7 @@ public class XPBDSolver : MonoBehaviour
 
         particles = new List<Particle>();
         distanceConstraints = new List<DistanceConstraint>();
+        brokenDistanceConstraints = new List<DistanceConstraint>();
         collisionConstraints = new List<CollisionConstraint>();
         attachmentConstraints = new List<AttachmentConstraint>();
         cloths = new List<MultiphysicsCloth>();
@@ -95,7 +96,19 @@ public class XPBDSolver : MonoBehaviour
             foreach (var ac in attachmentConstraints) ac.solve();
         }
 
-        distanceConstraints.RemoveAll(c => c.lambda > tearingThreshold);
+        distanceConstraints.RemoveAll(d => d.lambda > tearingThreshold);
+
+        /*
+        for (int k = distanceConstraints.Count - 1; k >= 0; k--)
+        {
+            var d = distanceConstraints[k];
+            if (d.lambda > tearingThreshold)
+            {
+                brokenDistanceConstraints.Add(d);
+                distanceConstraints.RemoveAt(k);
+            }
+        }
+        */
     }
     private void updateVelocities()
     {

@@ -134,9 +134,6 @@ public class MultiphysicsCloth : MonoBehaviour
 
     public void renderClothSolid(XPBDSolver solver)
     {
-        if (clothMesh == null || particles == null)
-            return;
-
         if (solver.brokenDistanceConstraints.Count > 0)
         {
             foreach (var d in solver.brokenDistanceConstraints)
@@ -148,11 +145,16 @@ public class MultiphysicsCloth : MonoBehaviour
                 }
             }
             solver.brokenDistanceConstraints.Clear();
-
-            updateMeshVertices();
-            buildTriangles();
-            applyMeshData();
         }
+
+        updateMeshVertices();
+        buildTriangles();
+        applyMeshData();
+
+        if (clothMesh == null || vertices == null) return;
+        clothMesh.vertices = vertices;
+        clothMesh.RecalculateNormals();
+        clothMesh.RecalculateBounds();
     }
     private void initializeMeshData()
     {
