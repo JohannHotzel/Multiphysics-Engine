@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -27,6 +27,8 @@ public class MultiphysicsCloth : MonoBehaviour
     private HashSet<(int, int, int, int)> brokenEdges
         = new HashSet<(int, int, int, int)>();
 
+    private bool[,] diagonalRight;
+
 
     void Awake()
     {
@@ -38,6 +40,7 @@ public class MultiphysicsCloth : MonoBehaviour
     public void buildCloth(XPBDSolver solver)
     {
         particles = new Particle[numParticlesX, numParticlesY];
+        diagonalRight = new bool[numParticlesX - 1, numParticlesY - 1];
 
         for (int i = 0; i < numParticlesX; i++)
         {
@@ -101,13 +104,14 @@ public class MultiphysicsCloth : MonoBehaviour
 
                 if (i + 1 < numParticlesX && j + 1 < numParticlesY)
                 {
+                    diagonalRight[i, j] = right;
+
                     if (right)
                     {
                         Particle pd1 = particles[i + 1, j + 1];
                         var c = new DistanceConstraint(p, pd1, stiffness, solver);
                         solver.distanceConstraints.Add(c);
                         constraintMap[c] = (i, j, i + 1, j + 1);
-                        right = !right;
                     }
 
                     else if (!right)
@@ -116,9 +120,10 @@ public class MultiphysicsCloth : MonoBehaviour
                         Particle pd3 = particles[i, j + 1];
                         var c = new DistanceConstraint(pd2, pd3, stiffness, solver);
                         solver.distanceConstraints.Add(c);
-                        constraintMap[c] = (i + 1, j, i, j + 1);
-                        right = !right;
+                        constraintMap[c] = (i + 1, j, i, j + 1);             
                     }
+
+                    right = !right;
                 }
             }
         }
@@ -178,11 +183,12 @@ public class MultiphysicsCloth : MonoBehaviour
     private void buildTriangles()
     {
         int triIdx = 0;
-        int maxTris = (numParticlesX - 1) * (numParticlesY - 1) * 6;
-        var temp = new int[maxTris];
+        int quadCountX = numParticlesX - 1;
+        int quadCountY = numParticlesY - 1;
+        var temp = new int[quadCountX * quadCountY * 6];
 
-        for (int j = 0; j < numParticlesY - 1; j++)
-            for (int i = 0; i < numParticlesX - 1; i++)
+        for (int j = 0; j < quadCountY; j++)
+            for (int i = 0; i < quadCountX; i++)
             {
                 int i0 = j * numParticlesX + i;
                 int i1 = j * numParticlesX + (i + 1);
@@ -191,21 +197,41 @@ public class MultiphysicsCloth : MonoBehaviour
 
                 bool b01 = EdgeBroken(i, j, i + 1, j);
                 bool b02 = EdgeBroken(i, j, i, j + 1);
-                bool b12 = EdgeBroken(i + 1, j, i, j + 1);
-                if (!b01 && !b02 && !b12)
-                {
-                    temp[triIdx++] = i0;
-                    temp[triIdx++] = i2;
-                    temp[triIdx++] = i1;
-                }
 
-                bool b13 = EdgeBroken(i + 1, j, i + 1, j + 1);
-                bool b23 = EdgeBroken(i, j + 1, i + 1, j + 1);
-                if (!b12 && !b13 && !b23)
+                bool slashRight = shearConstraints && diagonalRight[i, j];
+                if (slashRight)
                 {
-                    temp[triIdx++] = i1;
-                    temp[triIdx++] = i2;
-                    temp[triIdx++] = i3;
+                    bool b03 = EdgeBroken(i, j, i + 1, j + 1);
+                    if (!b01 && !b03)
+                    {
+                        temp[triIdx++] = i0;
+                        temp[triIdx++] = i3;
+                        temp[triIdx++] = i1;
+                    }
+                    if (!b02 && !b03)
+                    {
+                        temp[triIdx++] = i0;
+                        temp[triIdx++] = i2;
+                        temp[triIdx++] = i3;
+                    }
+                }
+                else
+                {
+                    bool b12 = EdgeBroken(i + 1, j, i, j + 1);
+                    if (!b01 && !b02 && !b12)
+                    {
+                        temp[triIdx++] = i0;
+                        temp[triIdx++] = i2;
+                        temp[triIdx++] = i1;
+                    }
+                    bool b13 = EdgeBroken(i + 1, j, i + 1, j + 1);
+                    bool b23 = EdgeBroken(i, j + 1, i + 1, j + 1);
+                    if (!b12 && !b13 && !b23)
+                    {
+                        temp[triIdx++] = i1;
+                        temp[triIdx++] = i2;
+                        temp[triIdx++] = i3;
+                    }
                 }
             }
 
@@ -220,14 +246,13 @@ public class MultiphysicsCloth : MonoBehaviour
         clothMesh.RecalculateNormals();
         clothMesh.RecalculateBounds();
     }
-
+    
     private bool EdgeBroken(int i1, int j1, int i2, int j2)
     {
         if (i1 > i2 || (i1 == i2 && j1 > j2))
             (i1, j1, i2, j2) = (i2, j2, i1, j1);
         return brokenEdges.Contains((i1, j1, i2, j2));
     }
-
     public void MarkEdgeBroken(int i1, int j1, int i2, int j2)
     {
         if (i1 > i2 || (i1 == i2 && j1 > j2))
