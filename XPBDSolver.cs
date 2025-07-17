@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -68,10 +69,11 @@ public class XPBDSolver : MonoBehaviour
         ShuffleDistanceConstraints(distanceConstraints);
         findCollisionsOutsideSubStep();
 
+      //  distanceConstraints.ForEach(d => d.lambda = 0f);
+
         for (int i = 0; i < substeps; i++)
         {
             integrate();
-            //findCollisionsInsideSubStep();
             solveConstraints();
             updateVelocities();
         }
@@ -96,19 +98,18 @@ public class XPBDSolver : MonoBehaviour
             foreach (var ac in attachmentConstraints) ac.solve();
         }
 
-        distanceConstraints.RemoveAll(d => d.lambda > tearingThreshold);
-
-        /*
+       // distanceConstraints.RemoveAll(d => Mathf.Abs(d.lambda) > tearingThreshold);
+  
         for (int k = distanceConstraints.Count - 1; k >= 0; k--)
         {
             var d = distanceConstraints[k];
-            if (d.lambda > tearingThreshold)
+            if (Mathf.Abs(d.lambda) > tearingThreshold)
             {
                 brokenDistanceConstraints.Add(d);
                 distanceConstraints.RemoveAt(k);
             }
         }
-        */
+       
     }
     private void updateVelocities()
     {
