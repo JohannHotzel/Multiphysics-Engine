@@ -12,7 +12,8 @@ public class XPBDSolver : MonoBehaviour
     public int iterations = 5;
     public Vector3 gravity = new Vector3(0, -9.81f, 0);
     public float vMax;
-    public float mu;
+    public float muS;
+    public float muK;
     public float tearingThreshold = 0.1f;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
@@ -68,8 +69,6 @@ public class XPBDSolver : MonoBehaviour
     {
         ShuffleDistanceConstraints(distanceConstraints);
         findCollisionsOutsideSubStep();
-
-      //  distanceConstraints.ForEach(d => d.lambda = 0f);
 
         for (int i = 0; i < substeps; i++)
         {

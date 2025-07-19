@@ -43,14 +43,33 @@ public class CollisionConstraint : IConstraint
 
         if (c >= 0f) return;
 
-        float w = p.w;
-        float deltaLambdaN = -c / w;
-        Vector3 displacement = -c * n;
-        p.positionX += displacement;
+        Vector3 normalCorrection = -c * n;
+        Vector3 posX = p.positionX;
+        Vector3 posP = p.positionP;
+        p.positionX += normalCorrection;
 
-        Vector3 impulse = displacement / solver.dts * p.m;
+        Vector3 posDiff = posX - posP;
+        Vector3 tangentialDiff = posDiff - Vector3.Dot(posDiff, n) * n;
+        float tangentialLength = tangentialDiff.magnitude;
+        Vector3 tangentialCorrection = Vector3.zero;
+        float penetration = Mathf.Abs(c);
+
+        if (tangentialLength < solver.muS * penetration)
+            tangentialCorrection = tangentialDiff;              
+        else
+        {
+            float k = solver.muK * penetration;
+            float factor = Mathf.Min(k / tangentialLength, 1f);
+            tangentialCorrection = tangentialDiff * factor;
+        }
+
+        p.positionX -= tangentialCorrection;
+
+        Vector3 completeCorrection = normalCorrection + tangentialCorrection;
+
+        Vector3 impulse = completeCorrection / solver.dts * p.m;
         if (collidingRigidbody != null)
-            collidingRigidbody.AddForceAtPosition(-impulse, q, ForceMode.Impulse);
+            collidingRigidbody.AddForceAtPosition(-impulse, p.positionX, ForceMode.Impulse);
 
     }
 
