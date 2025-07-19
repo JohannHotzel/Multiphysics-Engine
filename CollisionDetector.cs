@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using static ClosestPointOnMesh;
@@ -26,6 +26,7 @@ public static class CollisionDetector
 
             point = cp.point;
             normal = cp.normal;
+            return new CollisionConstraint(p, point, normal, p.radius, solver, rb);
         }
 
         //------- SphereCollider ------------------------------------------------------------------------------
@@ -44,6 +45,7 @@ public static class CollisionDetector
 
             normal = dir.normalized;
             point = center + normal * worldRadius;
+            return new CollisionConstraint(p, point, normal, p.radius, solver, rb);
         }
 
         //------- CapsuleCollider ------------------------------------------------------------------------------
@@ -78,14 +80,13 @@ public static class CollisionDetector
 
             normal = dir.normalized;
             point = closestOnSegment + normal * radius;
+            return new CollisionConstraint(p, point, normal, p.radius, solver, rb);
         }
 
         //------- BoxCollider ----------------------------------------------------------------------------------------
         else if (col is BoxCollider boxCol)
         {
-            Vector3 worldCenter = boxCol.transform.TransformPoint(boxCol.center);
-            Vector3 halfSize = Vector3.Scale(boxCol.size * 0.5f, boxCol.transform.lossyScale);
-
+            Vector3 halfSize = boxCol.size * 0.5f;
             Vector3 localPos = boxCol.transform.InverseTransformPoint(predictedPos) - boxCol.center;
 
             bool insideX = Mathf.Abs(localPos.x) <= halfSize.x;
@@ -126,13 +127,12 @@ public static class CollisionDetector
             return new CollisionConstraint(p, point, normal, p.radius, solver, rb);
         }
 
-        //------- Else -----------------------------------------------------------------------------------------
+
         else
         {
             return null;
         }
 
-        return new CollisionConstraint(p, point, normal, p.radius, solver, rb);
     }
 }
 
