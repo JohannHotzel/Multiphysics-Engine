@@ -160,12 +160,14 @@ public static class CollisionDetector
         foreach (var (p1, p2) in getCandidatePairs())
         {
             Vector3 delta = p2.positionX - p1.positionX;
+            Vector3 restDelta = p2.positionR - p1.positionR;
             float distSq = delta.sqrMagnitude;
+            float restDistSq = restDelta.sqrMagnitude;
 
             float radiusSum = p1.radius + p2.radius;
             float radiusSumSq = radiusSum * radiusSum;
 
-            if (distSq < radiusSumSq)
+            if (distSq < radiusSumSq && restDistSq > radiusSum)
             {
                 float dist = Mathf.Sqrt(distSq);
                 Vector3 normal = delta / dist;
