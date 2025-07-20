@@ -136,26 +136,39 @@ public static class CollisionDetector
 
     }
 
-    public static void detectParticleCollisions(List<Particle> particles, XPBDSolver solver)
+    public static void detectParticleCollisions(XPBDSolver solver)
     {
-        foreach (Particle p1 in particles)
+        var particles = solver.particles;
+        int count = particles.Count;
+
+        for (int i = 0; i < count; i++)
         {
-            foreach (Particle p2 in particles)
+            Particle p1 = particles[i];
+            if (!p1.solveForCollision) continue;
+
+            for (int j = i + 1; j < count; j++)
             {
-                if (p1 == p2 || !p1.solveForCollision || !p2.solveForCollision) continue;
-                Vector3 dir = p2.positionX - p1.positionX;
-                float dist = dir.magnitude;
-                if (dist < p1.radius + p2.radius)
+                Particle p2 = particles[j];
+                if (!p2.solveForCollision) continue;
+
+                Vector3 delta = p2.positionX - p1.positionX;
+                float distSq = delta.sqrMagnitude;
+
+                float radiusSum = p1.radius + p2.radius;
+                float radiusSumSq = radiusSum * radiusSum;
+
+                if (distSq < radiusSumSq)
                 {
-                    Vector3 normal = dir.normalized;
-                    float penetration = dist - (p1.radius + p2.radius);
+                    float dist = Mathf.Sqrt(distSq);
+                    Vector3 normal = delta / dist;
+
+                    float penetration = dist - radiusSum;
                     float wSum = p1.w + p2.w;
 
                     p1.positionX += normal * penetration * (p1.w / wSum);
                     p2.positionX -= normal * penetration * (p2.w / wSum);
                 }
             }
-
         }
     }
 
