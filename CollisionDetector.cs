@@ -9,13 +9,14 @@ public static class CollisionDetector
     {
         if (!p.solveForCollision) return null;
 
+
         Collider[] hits = Physics.OverlapSphere(predictedPos, p.radius * 1.1f);
-
         if (hits.Length == 0) return null;
-        Collider col = hits[0];
-
+       
         Vector3 point;
         Vector3 normal;
+
+        Collider col = hits[0];
         Rigidbody rb = col.attachedRigidbody;
 
         //------- MeshCollider ------------------------------------------------------------------------------
