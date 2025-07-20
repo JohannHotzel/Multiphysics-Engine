@@ -73,6 +73,7 @@ public class XPBDSolver : MonoBehaviour
         for (int i = 0; i < substeps; i++)
         {
             integrate();
+            CollisionDetector.detectParticleCollisions(particles, this);
             solveConstraints();
             updateVelocities();
         }

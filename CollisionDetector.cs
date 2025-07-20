@@ -135,6 +135,34 @@ public static class CollisionDetector
         }
 
     }
+
+    public static void detectParticleCollisions(List<Particle> particles, XPBDSolver solver)
+    {
+        foreach (Particle p1 in particles)
+        {
+            foreach (Particle p2 in particles)
+            {
+                if (p1 == p2 || !p1.solveForCollision || !p2.solveForCollision) continue;
+                Vector3 dir = p2.positionX - p1.positionX;
+                float dist = dir.magnitude;
+                if (dist < p1.radius + p2.radius)
+                {
+                    Vector3 normal = dir.normalized;
+                    float penetration = dist - (p1.radius + p2.radius);
+                    float wSum = p1.w + p2.w;
+
+                    p1.positionX += normal * penetration * (p1.w / wSum);
+                    p2.positionX -= normal * penetration * (p2.w / wSum);
+                }
+            }
+
+        }
+    }
+
+    public static void createHash()
+    {
+
+    }
 }
 
 
