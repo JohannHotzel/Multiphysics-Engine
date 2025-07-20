@@ -1,10 +1,12 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 using static ClosestPointOnMesh;
 
 public static class CollisionDetector
 {
+
     public static CollisionConstraint detectCollisionSubstepRadiusNormal(Particle p, Vector3 predictedPos, XPBDSolver solver)
     {
         if (!p.solveForCollision) return null;
@@ -136,46 +138,120 @@ public static class CollisionDetector
 
     }
 
+
+
+    private static float cellSize;
+    private static Dictionary<Vector3Int, List<Particle>> buckets = new Dictionary<Vector3Int, List<Particle>>();
+    private static readonly Vector3Int[] neighborOffsets = new Vector3Int[]
+    {
+        new Vector3Int(1, 0, 0),
+        new Vector3Int(0, 1, 0),
+        new Vector3Int(0, 0, 1),
+        new Vector3Int(1, 1, 0),
+        new Vector3Int(1, 0, 1),
+        new Vector3Int(0, 1, 1),
+        new Vector3Int(1, 1, 1)
+    };
     public static void detectParticleCollisions(XPBDSolver solver)
     {
         var particles = solver.particles;
         int count = particles.Count;
 
+        foreach (var (p1, p2) in getCandidatePairs())
+        {
+            Vector3 delta = p2.positionX - p1.positionX;
+            float distSq = delta.sqrMagnitude;
+
+            float radiusSum = p1.radius + p2.radius;
+            float radiusSumSq = radiusSum * radiusSum;
+
+            if (distSq < radiusSumSq)
+            {
+                float dist = Mathf.Sqrt(distSq);
+                Vector3 normal = delta / dist;
+
+                float penetration = dist - radiusSum;
+                float wSum = p1.w + p2.w;
+
+                p1.positionX += normal * penetration * (p1.w / wSum);
+                p2.positionX -= normal * penetration * (p2.w / wSum);
+            }
+        }
+    }
+    public static void createHash(XPBDSolver solver)
+    {
+        List<Particle> particles = solver.particles;
+        int count = particles.Count;
+
+        float maxRadius = 0f;
         for (int i = 0; i < count; i++)
         {
-            Particle p1 = particles[i];
-            if (!p1.solveForCollision) continue;
+            Particle p = particles[i];
+            if (p.solveForCollision)
+                maxRadius = Mathf.Max(maxRadius, p.radius);
+        }
 
-            for (int j = i + 1; j < count; j++)
+        cellSize = maxRadius * 3.5f;
+        
+
+        buckets.Clear();
+        for (int i = 0; i < count; i++)
+        {
+            var p = particles[i];
+            if (p.solveForCollision)
+                insert(p);
+        }
+    }
+    public static IEnumerable<(Particle, Particle)> getCandidatePairs()
+    {
+        foreach (var kvp in buckets)
+        {
+            var cellKey = kvp.Key;
+            var cellParticles = kvp.Value;
+
+            for (int i = 0; i < cellParticles.Count; i++)
             {
-                Particle p2 = particles[j];
-                if (!p2.solveForCollision) continue;
-
-                Vector3 delta = p2.positionX - p1.positionX;
-                float distSq = delta.sqrMagnitude;
-
-                float radiusSum = p1.radius + p2.radius;
-                float radiusSumSq = radiusSum * radiusSum;
-
-                if (distSq < radiusSumSq)
+                for (int j = i + 1; j < cellParticles.Count; j++)
                 {
-                    float dist = Mathf.Sqrt(distSq);
-                    Vector3 normal = delta / dist;
+                    yield return (cellParticles[i], cellParticles[j]);
+                }
+            }
 
-                    float penetration = dist - radiusSum;
-                    float wSum = p1.w + p2.w;
+            foreach (var offset in neighborOffsets)
+            {
+                var neighborKey = cellKey + offset;
+                if (!buckets.TryGetValue(neighborKey, out var neighborParticles))
+                    continue;
 
-                    p1.positionX += normal * penetration * (p1.w / wSum);
-                    p2.positionX -= normal * penetration * (p2.w / wSum);
+                foreach (var p1 in cellParticles)
+                {
+                    foreach (var p2 in neighborParticles)
+                    {
+                        yield return (p1, p2);
+                    }
                 }
             }
         }
     }
-
-    public static void createHash()
+    private static void insert(Particle p)
     {
-
+        var key = hash(p.positionX);
+        if (!buckets.TryGetValue(key, out var list))
+        {
+            list = new List<Particle>();
+            buckets[key] = list;
+        }
+        list.Add(p);
     }
+    private static Vector3Int hash(Vector3 pos)
+    {
+        return new Vector3Int(
+            Mathf.FloorToInt(pos.x / cellSize),
+            Mathf.FloorToInt(pos.y / cellSize),
+            Mathf.FloorToInt(pos.z / cellSize)
+        );
+    }
+
 }
 
 

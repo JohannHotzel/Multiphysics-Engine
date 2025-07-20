@@ -69,6 +69,7 @@ public class XPBDSolver : MonoBehaviour
     {
         ShuffleDistanceConstraints(distanceConstraints);
         findCollisionsOutsideSubStep();
+        CollisionDetector.createHash(this);
 
         for (int i = 0; i < substeps; i++)
         {
