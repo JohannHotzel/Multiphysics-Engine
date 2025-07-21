@@ -15,6 +15,7 @@ public class XPBDSolver : MonoBehaviour
     public float muS;
     public float muK;
     public float tearingThreshold = 0.1f;
+    public float overRelaxation = 1f;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;

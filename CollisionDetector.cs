@@ -193,7 +193,7 @@ public static class CollisionDetector
                 maxRadius = Mathf.Max(maxRadius, p.radius);
         }
 
-        cellSize = maxRadius * 3.5f;
+        cellSize = maxRadius * 3f;
         
 
         buckets.Clear();

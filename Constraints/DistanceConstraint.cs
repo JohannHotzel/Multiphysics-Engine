@@ -32,10 +32,10 @@ public class DistanceConstraint : IConstraint
 
         if (p1.w != 0)
             p1.positionX -= direction * lambda * p1.w;
-
-        if (p2.w != 0)
+        
+        if (p2.w != 0)       
             p2.positionX += direction * lambda * p2.w;
-
+        
     }
 
 }

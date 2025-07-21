@@ -10,6 +10,7 @@ public class Particle
     public float w;
     public bool solveForCollision = true;
     public float radius;
+    public int numberOfConstraints = 0;
 
     public Particle(Vector3 position, float m, float radius)
     {
