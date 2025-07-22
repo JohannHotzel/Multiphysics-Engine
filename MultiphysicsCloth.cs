@@ -16,6 +16,7 @@ public class MultiphysicsCloth : MonoBehaviour
     public bool shearConstraints;
     public bool fixTop;
     [HideInInspector] public Particle[,] particles;
+    //Add Datastructure for triangles, vertices, and adjacency information
 
     private Mesh clothMesh;
     private Vector3[] vertices;

@@ -70,12 +70,12 @@ public class XPBDSolver : MonoBehaviour
     {
         ShuffleDistanceConstraints(distanceConstraints);
         findCollisionsOutsideSubStep();
-        CollisionDetector.createHash(this);
+        //CollisionDetector.createHash(this);
 
         for (int i = 0; i < substeps; i++)
         {
             integrate();
-            CollisionDetector.detectParticleCollisions(this);
+           // CollisionDetector.detectParticleCollisions(this);
             solveConstraints();
             updateVelocities();
         }
@@ -100,8 +100,6 @@ public class XPBDSolver : MonoBehaviour
             foreach (var ac in attachmentConstraints) ac.solve();
         }
 
-       // distanceConstraints.RemoveAll(d => Mathf.Abs(d.lambda) > tearingThreshold);
-  
         for (int k = distanceConstraints.Count - 1; k >= 0; k--)
         {
             var d = distanceConstraints[k];
@@ -111,7 +109,6 @@ public class XPBDSolver : MonoBehaviour
                 distanceConstraints.RemoveAt(k);
             }
         }
-       
     }
     private void updateVelocities()
     {
