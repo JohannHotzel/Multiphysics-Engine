@@ -5,7 +5,6 @@ using UnityEngine;
 
 public class XPBDSolver : MonoBehaviour
 {
-
     [Header("Simulation Settings")]
     public float dt = 0.02f;
     public int substeps = 10;
@@ -16,6 +15,7 @@ public class XPBDSolver : MonoBehaviour
     public float muK;
     public float tearingThreshold = 0.1f;
     public float overRelaxation = 1f;
+    public bool selfCollisions = true;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
@@ -26,7 +26,6 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
     private System.Random rng = new System.Random();
-
 
     [Header("Rendering Settings")]
     public bool showParticles = true;
@@ -44,7 +43,6 @@ public class XPBDSolver : MonoBehaviour
     private Mesh lineMesh;
     private Vector3[] verts;
     private int[] indices;
-
 
 
     void Start()
@@ -70,12 +68,17 @@ public class XPBDSolver : MonoBehaviour
     {
         ShuffleDistanceConstraints(distanceConstraints);
         findCollisionsOutsideSubStep();
-        CollisionDetector.createHash(this);
+
+        if(selfCollisions)
+            CollisionDetector.createHash(this);
 
         for (int i = 0; i < substeps; i++)
         {
             integrate();
-            CollisionDetector.detectParticleCollisions(this);
+
+            if (selfCollisions)
+                CollisionDetector.detectParticleCollisions(this);
+
             solveConstraints();
             updateVelocities();
         }
@@ -137,30 +140,8 @@ public class XPBDSolver : MonoBehaviour
 
         }
     }
-    private void findCollisionsInsideSubStep()
-    {
-        collisionConstraints.Clear();
 
-        foreach (Particle p in particles)
-        {
-            if (p.w == 0) continue;
 
-            CollisionConstraint collisionConstraint = CollisionDetector.detectCollisionSubstepRadiusNormal(p, p.positionX, GetComponent<XPBDSolver>());
-            if (collisionConstraint != null)
-                collisionConstraints.Add(collisionConstraint);
-        }
-    }
-
-    private void ShuffleConstraints(List<IConstraint> list)
-    {
-        for (int i = list.Count - 1; i > 0; i--)
-        {
-            int j = rng.Next(i + 1);
-            var tmp = list[i];
-            list[i] = list[j];
-            list[j] = tmp;
-        }
-    }
     private void ShuffleDistanceConstraints(List<DistanceConstraint> list)
     {
         for (int i = list.Count - 1; i > 0; i--)
@@ -171,9 +152,6 @@ public class XPBDSolver : MonoBehaviour
             list[j] = tmp;
         }
     }
-
-
-
 
     //------------------------------------------------------------------------------------------------------------------------------------------//
     //----------------- Register Physical Objects ----------------------------------------------------------------------------------------------//

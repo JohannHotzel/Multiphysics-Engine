@@ -130,14 +130,9 @@ public static class CollisionDetector
             return new CollisionConstraint(p, point, normal, p.radius, solver, rb);
         }
 
-
-        else
-        {
-            return null;
-        }
-
+         return null;
+       
     }
-
 
 
     private static float cellSize;
