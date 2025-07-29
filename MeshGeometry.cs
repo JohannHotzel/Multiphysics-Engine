@@ -4,14 +4,30 @@ using UnityEngine;
 
 public class Vertex
 {
-    public readonly int Index;              
-    public Vector3 Position;
+    public readonly int Index;
+
+    public Particle Particle;
+
+    private Vector3 _position; 
+
+    public Vector3 Position
+    {
+        get => Particle != null ? Particle.positionX : _position;
+        set
+        {
+            if (Particle != null)
+                Particle.positionX = value;
+            else
+                _position = value;
+        }
+    }
+
     public List<Edge> IncidentEdges = new List<Edge>();
     public List<Triangle> IncidentTriangles = new List<Triangle>();
 
     public Vertex(Vector3 pos, int idx)
     {
-        Position = pos;
+        _position = pos;
         Index = idx;
     }
 }
@@ -115,11 +131,6 @@ public class MeshGeometry
             indices[3 * i + 2] = t.C.Index;
         }
         mesh.triangles = indices;
-
-        //var uvs = new Vector2[vertices.Count];
-        //for (int i = 0; i < uvs.Length; i++)
-        //    uvs[i] = new Vector2(vertices[i].Position.x, vertices[i].Position.y);
-        //mesh.uv = uvs;
 
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
