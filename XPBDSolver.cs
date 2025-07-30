@@ -23,7 +23,7 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public List<DistanceConstraint> brokenDistanceConstraints;
     [HideInInspector] public List<CollisionConstraint> collisionConstraints;
     [HideInInspector] public List<AttachmentConstraint> attachmentConstraints; 
-    [HideInInspector] public List<NewMultiphysicsCloth> cloths;
+    [HideInInspector] public List<MultiphysicsCloth> cloths;
 
     private System.Random rng = new System.Random();
 
@@ -55,7 +55,7 @@ public class XPBDSolver : MonoBehaviour
         brokenDistanceConstraints = new List<DistanceConstraint>();
         collisionConstraints = new List<CollisionConstraint>();
         attachmentConstraints = new List<AttachmentConstraint>();
-        cloths = new List<NewMultiphysicsCloth>();
+        cloths = new List<MultiphysicsCloth>();
 
         registerCloth();
     }
@@ -158,7 +158,7 @@ public class XPBDSolver : MonoBehaviour
     //------------------------------------------------------------------------------------------------------------------------------------------//
     private void registerCloth()
     {
-        foreach (NewMultiphysicsCloth cloth in FindObjectsByType<NewMultiphysicsCloth>(FindObjectsSortMode.None))
+        foreach (MultiphysicsCloth cloth in FindObjectsByType<MultiphysicsCloth>(FindObjectsSortMode.None))
         {
             cloth.BuildCloth(this);
             cloths.Add(cloth);
@@ -179,7 +179,7 @@ public class XPBDSolver : MonoBehaviour
 
         if (showCloths)
         {
-            foreach (NewMultiphysicsCloth cloth in cloths)
+            foreach (MultiphysicsCloth cloth in cloths)
             {
                 cloth.RenderCloth();
             }

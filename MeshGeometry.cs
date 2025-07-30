@@ -8,26 +8,14 @@ public class Vertex
 
     public Particle Particle;
 
-    private Vector3 _position; 
-
-    public Vector3 Position
-    {
-        get => Particle != null ? Particle.positionX : _position;
-        set
-        {
-            if (Particle != null)
-                Particle.positionX = value;
-            else
-                _position = value;
-        }
-    }
+    private Vector3 Position; 
 
     public List<Edge> IncidentEdges = new List<Edge>();
     public List<Triangle> IncidentTriangles = new List<Triangle>();
 
     public Vertex(Vector3 pos, int idx)
     {
-        _position = pos;
+        Position = pos;
         Index = idx;
     }
 }
@@ -81,6 +69,7 @@ public class Triangle
 
 public class MeshGeometry
 {
+    public Transform transform;
     private readonly List<Vertex> vertices = new List<Vertex>();
     private readonly List<Edge> edges = new List<Edge>();
     private readonly List<Triangle> triangles = new List<Triangle>();
@@ -120,7 +109,7 @@ public class MeshGeometry
     {
         var mesh = new Mesh { name = "ProceduralMesh" };
 
-        mesh.vertices = vertices.ConvertAll(v => v.Position).ToArray();
+        mesh.vertices = vertices.ConvertAll(v => transform.InverseTransformPoint(v.Particle.positionX)).ToArray();
 
         var indices = new int[triangles.Count * 3];
         for (int i = 0; i < triangles.Count; i++)
@@ -142,7 +131,7 @@ public class MeshGeometry
     {
         var mesh = new Mesh { name = "ProceduralMesh" };
 
-        mesh.vertices = vertices.ConvertAll(v => v.Position).ToArray();
+        mesh.vertices = vertices.ConvertAll(v => transform.InverseTransformPoint(v.Particle.positionX)).ToArray();
 
         var indexList = new List<int>(triangles.Count * 3);
         foreach (var t in triangles)

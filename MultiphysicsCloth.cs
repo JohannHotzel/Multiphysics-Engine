@@ -1,335 +1,178 @@
-﻿using System;
-using System.Collections.Generic;
 using UnityEngine;
+
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class MultiphysicsCloth : MonoBehaviour
 {
     [Header("Cloth Settings")]
-    public int numParticlesX;
-    public int numParticlesY;
-    public float width;
-    public float height;
-    public float particleMass;
-    public float stiffness;
-    public float radius;
-    public bool shearConstraints;
-    public bool fixTop;
+    public int numParticlesX = 10;
+    public int numParticlesY = 10;
+    public float width = 1f;
+    public float height = 1f;
+    public float particleMass = 1f;
+    public float stiffness = 1f;
+    public float radius = 0.05f;
+    public bool shearConstraints = true;
+    public bool fixTop = true;
+
     [HideInInspector] public Particle[,] particles;
-    //Add Datastructure for triangles, vertices, and adjacency information
 
-    private Mesh clothMesh;
-    private Vector3[] vertices;
-    private int[] triangles;
-
-    private Dictionary<DistanceConstraint, (int i1, int j1, int i2, int j2)> constraintMap
-        = new Dictionary<DistanceConstraint, (int, int, int, int)>();
-
-    private HashSet<(int, int, int, int)> brokenEdges
-        = new HashSet<(int, int, int, int)>();
-
-    private bool[,] diagonalRight;
-
+    private MeshFilter meshFilter;
+    private MeshRenderer meshRenderer;
+    private MeshGeometry geom;
 
     void Awake()
     {
-        MeshFilter meshFilter = GetComponent<MeshFilter>();
-        clothMesh = new Mesh();
-        meshFilter.mesh = clothMesh;
+        meshFilter = GetComponent<MeshFilter>();
+        meshRenderer = GetComponent<MeshRenderer>();
     }
-
-    public void buildCloth(XPBDSolver solver)
+    public void BuildCloth(XPBDSolver solver)
     {
         particles = new Particle[numParticlesX, numParticlesY];
-        diagonalRight = new bool[numParticlesX - 1, numParticlesY - 1];
 
+        //---------------------------------- Initialize particles -----------------------------------------------------------
         for (int i = 0; i < numParticlesX; i++)
         {
             for (int j = 0; j < numParticlesY; j++)
             {
                 float x = i * width / (numParticlesX - 1);
                 float y = j * height / (numParticlesY - 1);
-                Vector3 positionLocal = new Vector3(x, y, 0);
-                Vector3 position = transform.TransformPoint(positionLocal);
+                Vector3 worldPos = transform.TransformPoint(new Vector3(x, y, 0));
 
-                Particle p = new Particle(position, particleMass, radius);
+                Particle p = new Particle(worldPos, particleMass, radius);
                 particles[i, j] = p;
                 solver.particles.Add(p);
 
-                if(fixTop && j == numParticlesY - 1)
+                if (fixTop && j == numParticlesY - 1)
                 {
                     p.w = 0f;
                     p.solveForCollision = false;
                 }
 
-                Collider[] hits = Physics.OverlapSphere(position, radius);
+                Collider[] hits = Physics.OverlapSphere(worldPos, radius);
                 if (hits.Length > 0)
                 {
-                    GameObject parent = hits[0].gameObject;
-                    Vector3 parentPosition = parent.transform.InverseTransformPoint(position);
-                    AttachmentConstraint atc = new AttachmentConstraint(p, parent, parentPosition, solver);
-                    solver.attachmentConstraints.Add(atc);              
+                    var parent = hits[0].gameObject;
+                    var localPos = parent.transform.InverseTransformPoint(worldPos);
+                    var atc = new AttachmentConstraint(p, parent, localPos, solver);
+                    solver.attachmentConstraints.Add(atc);
                     p.solveForCollision = false;
                 }
             }
         }
 
-        bool right = true;
-
+        //---------------------------------- Create distance constraints between particles ----------------------------------
+        bool flip = true;
         for (int i = 0; i < numParticlesX; i++)
         {
-            right = !right;
+            flip = !flip;
 
             for (int j = 0; j < numParticlesY; j++)
             {
-                Particle p = particles[i, j];
+                var p = particles[i, j];
 
                 if (i + 1 < numParticlesX)
                 {
                     var pr = particles[i + 1, j];
-                    var c = new DistanceConstraint(p, pr, stiffness, solver);
-                    solver.distanceConstraints.Add(c);
-                    constraintMap[c] = (i, j, i + 1, j);
+                    solver.distanceConstraints.Add(new DistanceConstraint(p, pr, stiffness, solver));
                 }
 
                 if (j + 1 < numParticlesY)
                 {
                     var pu = particles[i, j + 1];
-                    var c = new DistanceConstraint(p, pu, stiffness, solver);
-                    solver.distanceConstraints.Add(c);
-                    constraintMap[c] = (i, j, i, j + 1);
+                    solver.distanceConstraints.Add(new DistanceConstraint(p, pu, stiffness, solver));
                 }
 
-                if (!shearConstraints)
-                    continue;
-
-                if (i + 1 < numParticlesX && j + 1 < numParticlesY)
+                if (shearConstraints && i + 1 < numParticlesX && j + 1 < numParticlesY)
                 {
-                    diagonalRight[i, j] = right;
-
-                    if (right)
+                    flip = !flip;
+                    if (flip)
                     {
-                        Particle pd1 = particles[i + 1, j + 1];
-                        var c = new DistanceConstraint(p, pd1, stiffness, solver);
-                        solver.distanceConstraints.Add(c);
-                        constraintMap[c] = (i, j, i + 1, j + 1);
+                        var pd = particles[i + 1, j + 1];
+                        solver.distanceConstraints.Add(new DistanceConstraint(p, pd, stiffness, solver));
                     }
-
-                    else if (!right)
+                    else
                     {
-                        Particle pd2 = particles[i + 1, j];
-                        Particle pd3 = particles[i, j + 1];
-                        var c = new DistanceConstraint(pd2, pd3, stiffness, solver);
-                        solver.distanceConstraints.Add(c);
-                        constraintMap[c] = (i + 1, j, i, j + 1);             
+                        var pd1 = particles[i + 1, j];
+                        var pd2 = particles[i, j + 1];
+                        solver.distanceConstraints.Add(new DistanceConstraint(pd1, pd2, stiffness, solver));
                     }
-
-                    right = !right;
                 }
             }
         }
 
-        if (solver.showCloths)
-        {
-            initializeMeshData();
-            updateMeshVertices();
-            buildTriangles();
-            applyMeshData();
-        }
-    }
+        //---------------------------------- Create mesh geometry -----------------------------------------------------------
+        if(!solver.showCloths)
+            return;
 
-    public void renderClothSolid(XPBDSolver solver)
-    {
-        if (solver.brokenDistanceConstraints.Count > 0)
-        {
-            foreach (var d in solver.brokenDistanceConstraints)
+        geom = new MeshGeometry();
+        geom.transform = transform;
+        Vertex[,] geoVerts = new Vertex[numParticlesX, numParticlesY];
+
+        for (int i = 0; i < numParticlesX; i++)
+            for (int j = 0; j < numParticlesY; j++)
             {
-                if (constraintMap.TryGetValue(d, out var coords))
-                {
-                    MarkEdgeBroken(coords.i1, coords.j1, coords.i2, coords.j2);
-                    constraintMap.Remove(d);
-                }
+                Vector3 localPos = transform.InverseTransformPoint(particles[i, j].positionX);
+                var v = geom.AddVertex(localPos);
+                v.Particle = particles[i, j];
+                geoVerts[i, j] = v;
             }
-            solver.brokenDistanceConstraints.Clear();
-        }
 
-        updateMeshVertices();
-        buildTriangles();
-        applyMeshData();
-
-        if (clothMesh == null || vertices == null) return;
-        clothMesh.vertices = vertices;
-        clothMesh.RecalculateNormals();
-        clothMesh.RecalculateBounds();
-    }
-    private void initializeMeshData()
-    {
-        vertices = new Vector3[numParticlesX * numParticlesY];
-        triangles = new int[(numParticlesX - 1) * (numParticlesY - 1) * 6];
-    }
-    private void updateMeshVertices()
-    {
-        int idx = 0;
-        for (int j = 0; j < numParticlesY; j++)
-        {
-            for (int i = 0; i < numParticlesX; i++)
+        for (int i = 0; i < numParticlesX - 1; i++)
+            for (int j = 0; j < numParticlesY - 1; j++)
             {
-                idx = j * numParticlesX + i;
+                var v00 = geoVerts[i, j];
+                var v10 = geoVerts[i + 1, j];
+                var v01 = geoVerts[i, j + 1];
+                var v11 = geoVerts[i + 1, j + 1];
 
-                Vector3 worldPos = particles[i, j].positionX;
-                vertices[idx] = transform.InverseTransformPoint(worldPos);
-            }
-        }
-    }
-    private void buildTriangles()
-    {
-        int triIdx = 0;
-        int quadCountX = numParticlesX - 1;
-        int quadCountY = numParticlesY - 1;
-        var temp = new int[quadCountX * quadCountY * 6];
-
-        for (int j = 0; j < quadCountY; j++)
-            for (int i = 0; i < quadCountX; i++)
-            {
-                int i0 = j * numParticlesX + i;
-                int i1 = j * numParticlesX + (i + 1);
-                int i2 = (j + 1) * numParticlesX + i;
-                int i3 = (j + 1) * numParticlesX + (i + 1);
-
-                bool b01 = EdgeBroken(i, j, i + 1, j);
-                bool b02 = EdgeBroken(i, j, i, j + 1);
-
-                bool slashRight = shearConstraints && diagonalRight[i, j];
-                if (slashRight)
-                {
-                    bool b03 = EdgeBroken(i, j, i + 1, j + 1);
-                    if (!b01 && !b03)
-                    {
-                        temp[triIdx++] = i0;
-                        temp[triIdx++] = i3;
-                        temp[triIdx++] = i1;
-                    }
-                    if (!b02 && !b03)
-                    {
-                        temp[triIdx++] = i0;
-                        temp[triIdx++] = i2;
-                        temp[triIdx++] = i3;
-                    }
-                }
-                else
-                {
-                    bool b12 = EdgeBroken(i + 1, j, i, j + 1);
-                    if (!b01 && !b02 && !b12)
-                    {
-                        temp[triIdx++] = i0;
-                        temp[triIdx++] = i2;
-                        temp[triIdx++] = i1;
-                    }
-                    bool b13 = EdgeBroken(i + 1, j, i + 1, j + 1);
-                    bool b23 = EdgeBroken(i, j + 1, i + 1, j + 1);
-                    if (!b12 && !b13 && !b23)
-                    {
-                        temp[triIdx++] = i1;
-                        temp[triIdx++] = i2;
-                        temp[triIdx++] = i3;
-                    }
-                }
+                geom.AddTriangle(v00, v11, v10);
+                geom.AddTriangle(v00, v01, v11);
             }
 
-        Array.Resize(ref temp, triIdx);
-        triangles = temp;
+        meshFilter.mesh = geom.BuildUnityMesh();
     }
-    private void applyMeshData()
+    public void RenderCloth()
     {
-        clothMesh.Clear();
-        clothMesh.vertices = vertices;
-        clothMesh.triangles = triangles;
-        clothMesh.RecalculateNormals();
-        clothMesh.RecalculateBounds();
-    }
-    
-    private bool EdgeBroken(int i1, int j1, int i2, int j2)
-    {
-        if (i1 > i2 || (i1 == i2 && j1 > j2))
-            (i1, j1, i2, j2) = (i2, j2, i1, j1);
-        return brokenEdges.Contains((i1, j1, i2, j2));
-    }
-    public void MarkEdgeBroken(int i1, int j1, int i2, int j2)
-    {
-        if (i1 > i2 || (i1 == i2 && j1 > j2))
-            (i1, j1, i2, j2) = (i2, j2, i1, j1);
-        brokenEdges.Add((i1, j1, i2, j2));
+        if (geom == null) return;
+        meshFilter.mesh = geom.BuildUnityMesh(); 
     }
 
 
+
+    //--------------------------------------------------------------------------------------------------------------------------------------------//
+    //---------------------------------- Display Gizmos ------------------------------------------------------------------------------------------//
+    //--------------------------------------------------------------------------------------------------------------------------------------------//
     void OnDrawGizmosSelected()
     {
         if (!Application.isPlaying) return;
-
-        Gizmos.color = Color.green;
-        Matrix4x4 oldMat = Gizmos.matrix;
-        Gizmos.matrix = transform.localToWorldMatrix;
-        Gizmos.DrawWireCube(
-            new Vector3(width * 0.5f, height * 0.5f, 0f),
-            new Vector3(width, height, 0f)
-        );
-        Gizmos.matrix = oldMat;
-
-
-        for (int i = 0; i < numParticlesX; i++)
-        {
-            for (int j = 0; j < numParticlesY; j++)
-            {
-                float x = i * width / (numParticlesX - 1);
-                float y = j * height / (numParticlesY - 1);
-                Vector3 positionLocal = new Vector3(x, y, 0);
-                Vector3 position = transform.TransformPoint(positionLocal);
-
-                if(fixTop && j == numParticlesY - 1)               
-                    Gizmos.color = Color.red;
-                
-                else
-                    Gizmos.color = Color.green;
-                
-                Gizmos.DrawSphere(position, 0.05f);
-                Gizmos.DrawWireSphere(position, radius);
-            }
-        }
-
+        DrawClothGizmos();
     }
     void OnDrawGizmos()
     {
         if (Application.isPlaying) return;
-
+        DrawClothGizmos();
+    }
+    private void DrawClothGizmos()
+    {
         Gizmos.color = Color.green;
-        Matrix4x4 oldMat = Gizmos.matrix;
+        var old = Gizmos.matrix;
         Gizmos.matrix = transform.localToWorldMatrix;
         Gizmos.DrawWireCube(
             new Vector3(width * 0.5f, height * 0.5f, 0f),
             new Vector3(width, height, 0f)
         );
-        Gizmos.matrix = oldMat;
-
+        Gizmos.matrix = old;
 
         for (int i = 0; i < numParticlesX; i++)
-        {
             for (int j = 0; j < numParticlesY; j++)
             {
                 float x = i * width / (numParticlesX - 1);
                 float y = j * height / (numParticlesY - 1);
-                Vector3 positionLocal = new Vector3(x, y, 0);
-                Vector3 position = transform.TransformPoint(positionLocal);
-
-                if(fixTop && j == numParticlesY - 1)               
-                    Gizmos.color = Color.red;
-                
-                else
-                    Gizmos.color = Color.green;
-
-                Gizmos.DrawSphere(position, 0.05f);
-                Gizmos.DrawWireSphere(position, radius);
+                Vector3 p = transform.TransformPoint(new Vector3(x, y, 0));
+                Gizmos.color = (fixTop && j == numParticlesY - 1) ? Color.red : Color.green;
+                Gizmos.DrawSphere(p, 0.05f);
+                Gizmos.DrawWireSphere(p, radius);
             }
-        }
     }
-
 }
