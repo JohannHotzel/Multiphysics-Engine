@@ -26,11 +26,15 @@ public class MultiphysicsCloth : MonoBehaviour
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
     }
+
+    //------------------------------------------------------------------------------------------------------------------------//
+    //---------------------------------------- Build/Initialize and Render Cloth ---------------------------------------------//
+    //------------------------------------------------------------------------------------------------------------------------//
     public void BuildCloth(XPBDSolver solver)
     {
         particles = new Particle[numParticlesX, numParticlesY];
 
-        //---------------------------------- Initialize particles -----------------------------------------------------------
+        //---------------------------------- Initialize particles -----------------------------------------------------------//
         for (int i = 0; i < numParticlesX; i++)
         {
             for (int j = 0; j < numParticlesY; j++)
@@ -61,7 +65,7 @@ public class MultiphysicsCloth : MonoBehaviour
             }
         }
 
-        //---------------------------------- Create distance constraints between particles ----------------------------------
+        //---------------------------------- Create distance constraints between particles ----------------------------------//
         bool flip = true;
         for (int i = 0; i < numParticlesX; i++)
         {
@@ -101,7 +105,7 @@ public class MultiphysicsCloth : MonoBehaviour
             }
         }
 
-        //---------------------------------- Create mesh geometry -----------------------------------------------------------
+        //---------------------------------- Create mesh geometry -----------------------------------------------------------//
         if(!solver.showCloths)
             return;
 
@@ -137,7 +141,6 @@ public class MultiphysicsCloth : MonoBehaviour
         if (geom == null) return;
         meshFilter.mesh = geom.BuildUnityMesh(); 
     }
-
 
 
     //--------------------------------------------------------------------------------------------------------------------------------------------//

@@ -65,8 +65,6 @@ public class Triangle
 
 
 
-
-
 public class MeshGeometry
 {
     public Transform transform;
