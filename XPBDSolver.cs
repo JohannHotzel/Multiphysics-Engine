@@ -23,6 +23,7 @@ public class XPBDSolver : MonoBehaviour
     [HideInInspector] public List<DistanceConstraint> brokenDistanceConstraints;
     [HideInInspector] public List<CollisionConstraint> collisionConstraints;
     [HideInInspector] public List<AttachmentConstraint> attachmentConstraints; 
+
     [HideInInspector] public List<MultiphysicsCloth> cloths;
 
     private System.Random rng = new System.Random();
