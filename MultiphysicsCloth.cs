@@ -36,8 +36,7 @@ public class MultiphysicsCloth : MonoBehaviour
 
         //---------------------------------- Initialize particles -----------------------------------------------------------//
         for (int i = 0; i < numParticlesX; i++)
-        {
-            for (int j = 0; j < numParticlesY; j++)
+        for (int j = 0; j < numParticlesY; j++)
             {
                 float x = i * width / (numParticlesX - 1);
                 float y = j * height / (numParticlesY - 1);
@@ -63,7 +62,7 @@ public class MultiphysicsCloth : MonoBehaviour
                     p.solveForCollision = false;
                 }
             }
-        }
+        
 
         //---------------------------------- Create distance constraints between particles ----------------------------------//
         bool flip = true;

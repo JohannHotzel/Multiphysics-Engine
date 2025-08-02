@@ -128,7 +128,7 @@ public class XPBDSolver : MonoBehaviour
 
         foreach (Particle p in particles)
         {
-            if (p.w == 0) continue;
+            if (p.w == 0 || p.solveForCollision == false) continue;
 
             Vector3 force = gravity * p.m;
             Vector3 acceleration = force * p.w;
