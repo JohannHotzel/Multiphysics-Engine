@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -30,6 +31,24 @@ public class Edge
         V0 = v0; V1 = v1;
         v0.IncidentEdges.Add(this);
         v1.IncidentEdges.Add(this);
+    }
+
+    public List<Vertex> GetAdjacentQuadVertices()
+    {
+        if (T0 == null || T1 == null)
+            return null;
+
+        Vertex GetOpposite(Triangle t)
+        {
+            if (t.A != V0 && t.A != V1) return t.A;
+            if (t.B != V0 && t.B != V1) return t.B;
+            return t.C;
+        }
+
+        var opp0 = GetOpposite(T0);
+        var opp1 = GetOpposite(T1);
+
+        return new List<Vertex> { V0, V1, opp0, opp1 };
     }
 
     public Vertex Other(Vertex v) => v == V0 ? V1 : V0;

@@ -67,7 +67,7 @@ public class XPBDSolver : MonoBehaviour
 
     void FixedUpdate()
     {
-        ShuffleDistanceConstraints(distanceConstraints);
+        shuffleDistanceConstraints(distanceConstraints);
         findCollisionsOutsideSubStep();
 
         if(selfCollisions)
@@ -143,7 +143,7 @@ public class XPBDSolver : MonoBehaviour
     }
 
 
-    private void ShuffleDistanceConstraints(List<DistanceConstraint> list)
+    private void shuffleDistanceConstraints(List<DistanceConstraint> list)
     {
         for (int i = list.Count - 1; i > 0; i--)
         {
@@ -166,6 +166,28 @@ public class XPBDSolver : MonoBehaviour
         }
     }
 
+
+    public void addUniqueDistanceConstraint(Particle pA, Particle pB, float stiffness)
+    {
+        if (pA == null || pB == null || pA == pB)
+            return;
+
+        bool exists = distanceConstraints.Any(d =>
+            (d.p1 == pA && d.p2 == pB) ||
+            (d.p1 == pB && d.p2 == pA)
+        );
+
+        if (!exists)
+        {
+            distanceConstraints.Add(new DistanceConstraint(pA, pB, stiffness, this));
+        }
+
+        else
+        {
+            Debug.Log("Already exists");
+        }
+            
+    }
 
     //------------------------------------------------------------------------------------------------------------------------------------------//
     //----------------- Rendering --------------------------------------------------------------------------------------------------------------//

@@ -1,3 +1,5 @@
+
+using System.Collections.Generic;
 using UnityEngine;
 
 
@@ -64,10 +66,7 @@ public class MultiphysicsCloth : MonoBehaviour
             }
         
 
-        // ---------------------------------- Create mesh geometry -----------------------------------------------------------//
-        if (!solver.showCloths)
-            return;
-
+        //---------------------------------- Create mesh geometry -----------------------------------------------------------//
         geom = new MeshGeometry();
         geom.transform = transform;
         Vertex[,] geoVerts = new Vertex[numParticlesX, numParticlesY];
@@ -106,17 +105,32 @@ public class MultiphysicsCloth : MonoBehaviour
             }
         }
 
-        meshFilter.mesh = geom.BuildUnityMesh();
+        if (solver.showCloths)
+            meshFilter.mesh = geom.BuildUnityMesh();
 
 
-        // ---------------------------------- Create constraints --------------------------------------------------------------//
+        //---------------------------------- Create constraints --------------------------------------------------------------//
         foreach (var edge in geom.edges) 
         {
-            var pA = edge.V0.Particle;
-            var pB = edge.V1.Particle;
-            solver.distanceConstraints.Add(new DistanceConstraint(pA, pB, stiffness, solver));
+            List<Vertex> vertices = edge.GetAdjacentQuadVertices();
+                 
+            if(vertices != null && vertices.Count == 4)
+            {
+                var pA = vertices[0].Particle;
+                var pB = vertices[1].Particle;
+                var pC = vertices[2].Particle;
+                var pD = vertices[3].Particle;
 
-
+                solver.addUniqueDistanceConstraint(pA, pB, stiffness);
+                solver.addUniqueDistanceConstraint(pC, pD, stiffness); //Simple Bending Constraints (Distance Constraints)
+            }
+            
+            else
+            {              
+                var pA = edge.V0.Particle;
+                var pB = edge.V1.Particle;
+                solver.addUniqueDistanceConstraint(pA, pB, stiffness);
+            }
         }
 
     }
