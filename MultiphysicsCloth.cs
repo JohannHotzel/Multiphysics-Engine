@@ -64,47 +64,6 @@ public class MultiphysicsCloth : MonoBehaviour
             }
         
 
-        //---------------------------------- Create distance constraints between particles ----------------------------------//
-        bool flip = true;
-
-        for (int i = 0; i < numParticlesX; i++)
-        {
-            flip = !flip;
-
-            for (int j = 0; j < numParticlesY; j++)
-            {
-                var p = particles[i, j];
-
-                if (i + 1 < numParticlesX)
-                {
-                    var pr = particles[i + 1, j];
-                    solver.distanceConstraints.Add(new DistanceConstraint(p, pr, stiffness, solver));
-                }
-
-                if (j + 1 < numParticlesY)
-                {
-                    var pu = particles[i, j + 1];
-                    solver.distanceConstraints.Add(new DistanceConstraint(p, pu, stiffness, solver));
-                }
-
-                if (shearConstraints && i + 1 < numParticlesX && j + 1 < numParticlesY)
-                {
-                    flip = !flip;
-                    if (flip)
-                    {
-                        var pd = particles[i + 1, j + 1];
-                        solver.distanceConstraints.Add(new DistanceConstraint(p, pd, stiffness, solver));
-                    }
-                    else
-                    {
-                        var pd1 = particles[i + 1, j];
-                        var pd2 = particles[i, j + 1];
-                        solver.distanceConstraints.Add(new DistanceConstraint(pd1, pd2, stiffness, solver));
-                    }
-                }
-            }
-        }
-
         // ---------------------------------- Create mesh geometry -----------------------------------------------------------//
         if (!solver.showCloths)
             return;
@@ -122,14 +81,13 @@ public class MultiphysicsCloth : MonoBehaviour
                 geoVerts[i, j] = v;
             }
 
-        flip = true;
+        bool flip = true;
         for (int i = 0; i < numParticlesX - 1; i++)
         {
             flip = !flip;
             for (int j = 0; j < numParticlesY - 1; j++)
             {
                 flip = !flip;
-
                 var v00 = geoVerts[i, j];
                 var v10 = geoVerts[i + 1, j];
                 var v01 = geoVerts[i, j + 1];
@@ -149,7 +107,21 @@ public class MultiphysicsCloth : MonoBehaviour
         }
 
         meshFilter.mesh = geom.BuildUnityMesh();
+
+
+        // ---------------------------------- Create constraints --------------------------------------------------------------//
+        foreach (var edge in geom.edges) 
+        {
+            var pA = edge.V0.Particle;
+            var pB = edge.V1.Particle;
+            solver.distanceConstraints.Add(new DistanceConstraint(pA, pB, stiffness, solver));
+
+
+        }
+
     }
+
+
     public void RenderCloth()
     {
         if (geom == null) return;

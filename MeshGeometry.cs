@@ -68,10 +68,10 @@ public class Triangle
 public class MeshGeometry
 {
     public Transform transform;
-    private readonly List<Vertex> vertices = new List<Vertex>();
-    private readonly List<Edge> edges = new List<Edge>();
-    private readonly List<Triangle> triangles = new List<Triangle>();
-    private readonly Dictionary<(int, int), Edge> edgeMap = new Dictionary<(int, int), Edge>();
+    public readonly List<Vertex> vertices = new List<Vertex>();
+    public readonly List<Edge> edges = new List<Edge>();
+    public readonly List<Triangle> triangles = new List<Triangle>();
+    public readonly Dictionary<(int, int), Edge> edgeMap = new Dictionary<(int, int), Edge>();
 
     public Vertex AddVertex(Vector3 pos)
     {
