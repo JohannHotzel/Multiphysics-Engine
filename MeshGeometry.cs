@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 
@@ -90,7 +91,14 @@ public class MeshGeometry
     public readonly List<Vertex> vertices = new List<Vertex>();
     public readonly List<Edge> edges = new List<Edge>();
     public readonly List<Triangle> triangles = new List<Triangle>();
+
     public readonly Dictionary<(int, int), Edge> edgeMap = new Dictionary<(int, int), Edge>();
+    private readonly Dictionary<(Particle, Particle), Edge> particleEdgeMap = new Dictionary<(Particle, Particle), Edge>();
+
+    private static (Particle, Particle) ParticleKey(Particle a, Particle b)
+    {
+        return RuntimeHelpers.GetHashCode(a) < RuntimeHelpers.GetHashCode(b) ? (a, b) : (b, a);
+    }
 
     public Vertex AddVertex(Vector3 pos)
     {
@@ -102,13 +110,23 @@ public class MeshGeometry
     public Edge GetOrCreateEdge(Vertex a, Vertex b)
     {
         var key = a.Index < b.Index ? (a.Index, b.Index) : (b.Index, a.Index);
-        if (edgeMap.TryGetValue(key, out var e))
-            return e;
 
-        e = new Edge(a, b);
-        edges.Add(e);
-        edgeMap[key] = e;
-        return e;
+        if (edgeMap.TryGetValue(key, out var edge))
+            return edge;
+
+        edge = new Edge(a, b);
+        edges.Add(edge);
+        edgeMap[key] = edge;
+
+        if (a.Particle != null && b.Particle != null)
+            particleEdgeMap[ParticleKey(a.Particle, b.Particle)] = edge;
+
+        return edge;
+    }
+    public Edge GetEdge(Particle pA, Particle pB)
+    {
+        particleEdgeMap.TryGetValue(ParticleKey(pA, pB), out var edge);
+        return edge;
     }
 
     public Triangle AddTriangle(Vertex a, Vertex b, Vertex c)

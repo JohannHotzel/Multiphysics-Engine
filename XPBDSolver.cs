@@ -14,8 +14,8 @@ public class XPBDSolver : MonoBehaviour
     public float muS;
     public float muK;
     public float tearingThreshold = 0.1f;
-    public float overRelaxation = 1f;
-    public bool selfCollisions = true;
+    public bool tearingEnabled = false;
+    public bool particleCollisionEnabled = true;
     [HideInInspector] public float dts;
     [HideInInspector] public float dts2;
     [HideInInspector] public List<Particle> particles;
@@ -70,14 +70,14 @@ public class XPBDSolver : MonoBehaviour
         shuffleDistanceConstraints(distanceConstraints);
         findCollisionsOutsideSubStep();
 
-        if(selfCollisions)
+        if(particleCollisionEnabled)
             CollisionDetector.createHash(this);
 
         for (int i = 0; i < substeps; i++)
         {
             integrate();
 
-            if (selfCollisions)
+            if (particleCollisionEnabled)
                 CollisionDetector.detectParticleCollisions(this);
 
             solveConstraints();
@@ -155,7 +155,7 @@ public class XPBDSolver : MonoBehaviour
     }
 
     //------------------------------------------------------------------------------------------------------------------------------------------//
-    //----------------- Register Physical Objects ----------------------------------------------------------------------------------------------//
+    //----------------- Register Objects -------------------------------------------------------------------------------------------------------//
     //------------------------------------------------------------------------------------------------------------------------------------------//
     private void registerCloth()
     {
@@ -165,8 +165,6 @@ public class XPBDSolver : MonoBehaviour
             cloths.Add(cloth);
         }
     }
-
-
     public void addUniqueDistanceConstraint(Particle pA, Particle pB, float stiffness)
     {
         if (pA == null || pB == null || pA == pB)
@@ -204,7 +202,10 @@ public class XPBDSolver : MonoBehaviour
         {
             foreach (MultiphysicsCloth cloth in cloths)
             {
-                cloth.RenderCloth();
+                if(tearingEnabled) 
+                    cloth.RenderCloth(this);
+                else
+                    cloth.RenderCloth(this);
             }
         }
     }

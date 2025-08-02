@@ -136,10 +136,27 @@ public class MultiphysicsCloth : MonoBehaviour
     }
 
 
-    public void RenderCloth()
+    public void RenderClothTearing(XPBDSolver solver)
     {
         if (geom == null) return;
-        meshFilter.mesh = geom.BuildUnityMesh(); 
+
+        List<Edge> tornEdges = new List<Edge>();
+        foreach (DistanceConstraint dc in solver.brokenDistanceConstraints)
+        {
+            Edge edge = geom.GetEdge(dc.p1, dc.p2);
+            if (edge != null && !tornEdges.Contains(edge))
+            {
+                tornEdges.Add(edge);
+            }
+        }
+
+        meshFilter.mesh = geom.BuildUnityMesh(tornEdges); 
+    }
+
+    public void RenderCloth(XPBDSolver solver)
+    {
+        if (geom == null) return;
+        meshFilter.mesh = geom.BuildUnityMesh();
     }
 
 
