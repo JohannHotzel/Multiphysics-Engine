@@ -13,6 +13,7 @@ public class MultiphysicsCloth : MonoBehaviour
     public float height = 1f;
     public float particleMass = 1f;
     public float stiffness = 1f;
+    public float damping = 0f; 
     public float radius = 0.05f;
     public bool shearConstraints = true;
     public bool fixTop = true;
@@ -121,15 +122,15 @@ public class MultiphysicsCloth : MonoBehaviour
                 var pC = vertices[2].Particle;
                 var pD = vertices[3].Particle;
 
-                solver.addUniqueDistanceConstraint(pA, pB, stiffness);
-                solver.addUniqueDistanceConstraint(pC, pD, stiffness); //Simple Bending Constraints (Distance Constraints)
+                solver.addUniqueDistanceConstraint(pA, pB, stiffness, damping);
+                solver.addUniqueDistanceConstraint(pC, pD, stiffness, damping); //Simple Bending Constraints (Distance Constraints)
             }
             
             else
             {              
                 var pA = edge.V0.Particle;
                 var pB = edge.V1.Particle;
-                solver.addUniqueDistanceConstraint(pA, pB, stiffness);
+                solver.addUniqueDistanceConstraint(pA, pB, stiffness, damping);
             }
         }
 

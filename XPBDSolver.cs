@@ -97,7 +97,11 @@ public class XPBDSolver : MonoBehaviour
     }
     private void solveConstraints()
     {
-        for(int i = 0; i < iterations; i++)
+        //initialize lambdas
+        foreach (var con in distanceConstraints) con.lambda = 0;
+
+
+        for (int i = 0; i < iterations; i++)
         {
             foreach (var con in distanceConstraints) con.solve();
             foreach (var con in collisionConstraints) con.solve();
@@ -165,7 +169,7 @@ public class XPBDSolver : MonoBehaviour
             cloths.Add(cloth);
         }
     }
-    public void addUniqueDistanceConstraint(Particle pA, Particle pB, float stiffness)
+    public void addUniqueDistanceConstraint(Particle pA, Particle pB, float stiffness, float damping)
     {
         if (pA == null || pB == null || pA == pB)
             return;
@@ -177,12 +181,12 @@ public class XPBDSolver : MonoBehaviour
 
         if (!exists)
         {
-            distanceConstraints.Add(new DistanceConstraint(pA, pB, stiffness, this));
+            distanceConstraints.Add(new DistanceConstraint(pA, pB, stiffness, damping, this));
         }
 
         else
         {
-            Debug.Log("Already exists");
+            Debug.Log("distanceConstraint Already exists");
         }
             
     }
@@ -203,7 +207,7 @@ public class XPBDSolver : MonoBehaviour
             foreach (MultiphysicsCloth cloth in cloths)
             {
                 if(tearingEnabled) 
-                    cloth.RenderCloth(this);
+                    cloth.RenderClothTearing(this);
                 else
                     cloth.RenderCloth(this);
             }
