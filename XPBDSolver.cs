@@ -169,10 +169,10 @@ public class XPBDSolver : MonoBehaviour
             cloths.Add(cloth);
         }
     }
-    public void addUniqueDistanceConstraint(Particle pA, Particle pB, float stiffness, float damping)
+    public DistanceConstraint addUniqueDistanceConstraint(Particle pA, Particle pB, float stiffness, float damping)
     {
         if (pA == null || pB == null || pA == pB)
-            return;
+            return null;
 
         bool exists = distanceConstraints.Any(d =>
             (d.p1 == pA && d.p2 == pB) ||
@@ -181,12 +181,15 @@ public class XPBDSolver : MonoBehaviour
 
         if (!exists)
         {
-            distanceConstraints.Add(new DistanceConstraint(pA, pB, stiffness, damping, this));
+            DistanceConstraint dc = new DistanceConstraint(pA, pB, stiffness, damping, this);
+            distanceConstraints.Add(dc);
+            return dc;
         }
 
         else
         {
             Debug.Log("distanceConstraint Already exists");
+            return null;
         }
             
     }

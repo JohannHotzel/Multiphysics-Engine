@@ -19,15 +19,43 @@ public class MultiphysicsCloth : MonoBehaviour
     public bool fixTop = true;
 
     [HideInInspector] public Particle[,] particles;
+    [HideInInspector] List<DistanceConstraint> distanceConstraints;
 
     private MeshFilter meshFilter;
     private MeshRenderer meshRenderer;
     private MeshGeometry geom;
 
+    private float previousStiffness;
+    private float previousDamping;
+
     void Awake()
     {
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
+
+        distanceConstraints = new List<DistanceConstraint>();
+
+        previousStiffness = stiffness;
+        previousDamping = damping;
+    }
+
+    void Update()
+    {
+        if (Mathf.Abs(previousStiffness - stiffness) > Mathf.Epsilon || Mathf.Abs(previousDamping - damping) > Mathf.Epsilon)
+        {
+
+            if (distanceConstraints != null)
+            {
+                foreach (var dc in distanceConstraints)
+                {
+                    dc.stiffness = stiffness;
+                    dc.damping = damping;
+                }
+            }
+
+            previousStiffness = stiffness;
+            previousDamping = damping;
+        }
     }
 
     //------------------------------------------------------------------------------------------------------------------------//
@@ -122,15 +150,19 @@ public class MultiphysicsCloth : MonoBehaviour
                 var pC = vertices[2].Particle;
                 var pD = vertices[3].Particle;
 
-                solver.addUniqueDistanceConstraint(pA, pB, stiffness, damping);
-                solver.addUniqueDistanceConstraint(pC, pD, stiffness, damping); //Simple Bending Constraints (Distance Constraints)
+                DistanceConstraint dc1 = solver.addUniqueDistanceConstraint(pA, pB, stiffness, damping);
+                DistanceConstraint dc2 = solver.addUniqueDistanceConstraint(pC, pD, stiffness, damping); //Simple Bending Constraints (Distance Constraints)
+
+                if (dc1 != null) distanceConstraints.Add(dc1);
+                if (dc2 != null) distanceConstraints.Add(dc2);
             }
             
             else
             {              
                 var pA = edge.V0.Particle;
                 var pB = edge.V1.Particle;
-                solver.addUniqueDistanceConstraint(pA, pB, stiffness, damping);
+                DistanceConstraint dc3 = solver.addUniqueDistanceConstraint(pA, pB, stiffness, damping);
+                if (dc3 != null) distanceConstraints.Add(dc3);
             }
         }
 
