@@ -7,7 +7,6 @@ struct Particle
     float3 pos;
     float3 vel;
 };
-
 RWStructuredBuffer<Particle> _Particles;
 
 float3 _BoundsMin;
@@ -31,8 +30,14 @@ void Update(uint3 id : SV_DispatchThreadID)
     if (p.pos.y < _BoundsMin.y)
     {
         p.pos.y = _BoundsMin.y;
-        p.vel.y *= -1;
+        p.vel.y *= -1.0;
     }
+
+    
+     if (p.pos.x < _BoundsMin.x) { p.pos.x = _BoundsMin.x; p.vel.x *= -1.0; }
+     if (p.pos.x > _BoundsMax.x) { p.pos.x = _BoundsMax.x; p.vel.x *= -1.0; }
+     if (p.pos.z < _BoundsMin.z) { p.pos.z = _BoundsMin.z; p.vel.z *= -1.0; }
+     if (p.pos.z > _BoundsMax.z) { p.pos.z = _BoundsMax.z; p.vel.z *= -1.0; }
 
     _Particles[i] = p;
 }
