@@ -1,9 +1,38 @@
-#pragma kernel CSMain
+#pragma kernel Update
 
+#define THREADS 256
 
-[numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID)
+struct Particle
 {
-    
+    float3 pos;
+    float3 vel;
+};
 
+RWStructuredBuffer<Particle> _Particles;
+
+float3 _BoundsMin;
+float3 _BoundsMax;
+float _DeltaTime;
+float _Gravity;
+uint _ParticleCount;
+
+[numthreads(THREADS, 1, 1)]
+void Update(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _ParticleCount)
+        return;
+
+    Particle p = _Particles[i];
+
+    p.vel.y += -_Gravity * _DeltaTime;
+    p.pos += p.vel * _DeltaTime;
+
+    if (p.pos.y < _BoundsMin.y)
+    {
+        p.pos.y = _BoundsMin.y;
+        p.vel.y *= -1;
+    }
+
+    _Particles[i] = p;
 }
