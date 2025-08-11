@@ -13,21 +13,40 @@ public class GpuXpbdSolver : MonoBehaviour
     public float height = 10f;
     public float gravity = 9.81f;
 
-    [Tooltip("Min/Max für einfache Boden-Kollision + Zeichen-Bounds")]
+
     public Vector3 boundsMin = new Vector3(-5f, -5f, -5f);
     public Vector3 boundsMax = new Vector3(5f, 5f, 5f);
 
     [Header("Rendering")]
-    public Mesh quadMesh;                  // leer lassen -> Built-in Quad wird geladen
-    public Material particleMaterial;      // Material mit Shader "Unlit/GPUParticlesBillboard"
-    public float particleSize = 0.06f;     // Billboard-Größe
-    public Color particleColor = Color.yellow;
+    public Mesh quadMesh;               
+    public Material particleMaterial;      
+    public float particleSize = 0.05f;    
+    public Color particleColor = Color.blue;
 
     const int THREADS = 256;
     int particleCount;
     int kUpdate;
 
-    struct Particle { public Vector3 pos; public Vector3 vel; }
+    struct Particle { 
+        public Vector3 positionP; // 3 floats
+        public Vector3 positionX; // 3 floats
+        public Vector3 velocity;  // 3 floats
+        public float m;           // 1 float
+        public float w;           // 1 float
+        public float radius;      // 1 float
+
+        public Particle(Vector3 pos, float mass, float rad)
+        {
+            positionP = pos;
+            positionX = pos;
+            velocity = Vector3.zero;
+            m = mass;
+            w = (mass == 0) ? 0 : 1 / mass;
+            radius = rad;
+        }
+    }
+
+    
 
     ComputeBuffer particleBuffer;          // StructuredBuffer<Particle>
     ComputeBuffer argsBuffer;              // Indirect draw args
@@ -52,19 +71,18 @@ public class GpuXpbdSolver : MonoBehaviour
             {
                 Vector3 localPos = new Vector3(i * dx - offsetX, j * dy - offsetY, 0f);
                 Vector3 worldPos = transform.TransformPoint(localPos);
-
-                cpuParticles[idx].pos = worldPos;
-                cpuParticles[idx].vel = Vector3.zero;
+                cpuParticles[idx] = new Particle(worldPos, 1f, particleSize * 0.5f);
                 idx++;
             }
         }
 
-        // --- GPU Buffer ---
+        // --- GPU Buffer ---------------------------------------------------------------------------------
         if (particleBuffer != null) particleBuffer.Release();
-        particleBuffer = new ComputeBuffer(particleCount, sizeof(float) * 6, ComputeBufferType.Structured);
+        int stride = 12 * sizeof(float);
+        particleBuffer = new ComputeBuffer(particleCount, stride, ComputeBufferType.Structured);
         particleBuffer.SetData(cpuParticles);
 
-        // --- Compute Shader Setup ---
+        // --- Compute Shader Setup ---------------------------------------------------------------------------------
         kUpdate = compute.FindKernel("Update");
         compute.SetBuffer(kUpdate, "_Particles", particleBuffer);
         compute.SetVector("_BoundsMin", boundsMin);
@@ -72,7 +90,9 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.SetFloat("_Gravity", gravity);
         compute.SetInt("_ParticleCount", particleCount);
 
-        // --- Rendering Setup ---
+
+
+        // --- Rendering Setup ---------------------------------------------------------------------------------
         if (quadMesh == null)
             quadMesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
         if (particleMaterial == null)

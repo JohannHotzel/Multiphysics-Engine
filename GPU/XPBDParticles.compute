@@ -1,12 +1,18 @@
-#pragma kernel Update
-
+#pragma kernel Integrate
+#pragma kernel SolveConstraints
+#pragma kernel UpdateVelocities
 #define THREADS 256
 
 struct Particle
 {
-    float3 pos;
-    float3 vel;
+    float3 positionP; // alte Position
+    float3 positionX; // neue Position
+    float3 velocity;
+    float m;
+    float w;
+    float radius;
 };
+
 RWStructuredBuffer<Particle> _Particles;
 
 float3 _BoundsMin;
@@ -15,8 +21,33 @@ float _DeltaTime;
 float _Gravity;
 uint _ParticleCount;
 
+// ------------------ KERNEL 1: INTEGRATE ------------------
 [numthreads(THREADS, 1, 1)]
-void Update(uint3 id : SV_DispatchThreadID)
+void Integrate(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _ParticleCount)
+        return;
+
+    Particle p = _Particles[i];
+    if (p.w == 0)
+        return; // statisch
+
+    // alte Position sichern
+    p.positionP = p.positionX;
+
+    // Geschwindigkeit anpassen
+    p.velocity.y += (-_Gravity) * _DeltaTime;
+
+    // neue Position vorhersagen
+    p.positionX += p.velocity * _DeltaTime;
+
+    _Particles[i] = p;
+}
+
+// ------------------ KERNEL 2: SOLVE CONSTRAINTS ------------------
+[numthreads(THREADS, 1, 1)]
+void SolveConstraints(uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
     if (i >= _ParticleCount)
@@ -24,20 +55,39 @@ void Update(uint3 id : SV_DispatchThreadID)
 
     Particle p = _Particles[i];
 
-    p.vel.y += -_Gravity * _DeltaTime;
-    p.pos += p.vel * _DeltaTime;
+    // Einfache Bounds-Kollision
+    if (p.positionX.y - p.radius < _BoundsMin.y)
+        p.positionX.y = _BoundsMin.y + p.radius;
+    if (p.positionX.y + p.radius > _BoundsMax.y)
+        p.positionX.y = _BoundsMax.y - p.radius;
 
-    if (p.pos.y < _BoundsMin.y)
-    {
-        p.pos.y = _BoundsMin.y;
-        p.vel.y *= -1.0;
-    }
+    if (p.positionX.x - p.radius < _BoundsMin.x)
+        p.positionX.x = _BoundsMin.x + p.radius;
+    if (p.positionX.x + p.radius > _BoundsMax.x)
+        p.positionX.x = _BoundsMax.x - p.radius;
 
-    
-     if (p.pos.x < _BoundsMin.x) { p.pos.x = _BoundsMin.x; p.vel.x *= -1.0; }
-     if (p.pos.x > _BoundsMax.x) { p.pos.x = _BoundsMax.x; p.vel.x *= -1.0; }
-     if (p.pos.z < _BoundsMin.z) { p.pos.z = _BoundsMin.z; p.vel.z *= -1.0; }
-     if (p.pos.z > _BoundsMax.z) { p.pos.z = _BoundsMax.z; p.vel.z *= -1.0; }
+    if (p.positionX.z - p.radius < _BoundsMin.z)
+        p.positionX.z = _BoundsMin.z + p.radius;
+    if (p.positionX.z + p.radius > _BoundsMax.z)
+        p.positionX.z = _BoundsMax.z - p.radius;
+
+    _Particles[i] = p;
+}
+
+// ------------------ KERNEL 3: UPDATE VELOCITIES ------------------
+[numthreads(THREADS, 1, 1)]
+void UpdateVelocities(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _ParticleCount)
+        return;
+
+    Particle p = _Particles[i];
+    if (p.w == 0)
+        return;
+
+    // neue Velocity aus Positionsdifferenz
+    p.velocity = (p.positionX - p.positionP) / _DeltaTime;
 
     _Particles[i] = p;
 }
