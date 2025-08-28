@@ -1,12 +1,13 @@
 #pragma kernel Integrate
 #pragma kernel SolveConstraints
 #pragma kernel UpdateVelocities
+
 #define THREADS 256
 
 struct Particle
 {
-    float3 positionP; // alte Position
-    float3 positionX; // neue Position
+    float3 positionP; // previous
+    float3 positionX; // current/predicted
     float3 velocity;
     float m;
     float w;
@@ -21,6 +22,7 @@ float _DeltaTime;
 float _Gravity;
 uint _ParticleCount;
 
+
 // ------------------ KERNEL 1: INTEGRATE ------------------
 [numthreads(THREADS, 1, 1)]
 void Integrate(uint3 id : SV_DispatchThreadID)
@@ -31,15 +33,14 @@ void Integrate(uint3 id : SV_DispatchThreadID)
 
     Particle p = _Particles[i];
     if (p.w == 0)
-        return; // statisch
+        return; // static
 
-    // alte Position sichern
     p.positionP = p.positionX;
 
-    // Geschwindigkeit anpassen
+    // gravity
     p.velocity.y += (-_Gravity) * _DeltaTime;
 
-    // neue Position vorhersagen
+    // predict
     p.positionX += p.velocity * _DeltaTime;
 
     _Particles[i] = p;
@@ -55,7 +56,7 @@ void SolveConstraints(uint3 id : SV_DispatchThreadID)
 
     Particle p = _Particles[i];
 
-    // Einfache Bounds-Kollision
+    // simple AABB bounds
     if (p.positionX.y - p.radius < _BoundsMin.y)
         p.positionX.y = _BoundsMin.y + p.radius;
     if (p.positionX.y + p.radius > _BoundsMax.y)
@@ -74,6 +75,7 @@ void SolveConstraints(uint3 id : SV_DispatchThreadID)
     _Particles[i] = p;
 }
 
+
 // ------------------ KERNEL 3: UPDATE VELOCITIES ------------------
 [numthreads(THREADS, 1, 1)]
 void UpdateVelocities(uint3 id : SV_DispatchThreadID)
@@ -86,7 +88,6 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID)
     if (p.w == 0)
         return;
 
-    // neue Velocity aus Positionsdifferenz
     p.velocity = (p.positionX - p.positionP) / _DeltaTime;
 
     _Particles[i] = p;
