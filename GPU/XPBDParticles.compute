@@ -1,8 +1,13 @@
-#pragma kernel Integrate
-#pragma kernel SolveConstraints
+﻿#pragma kernel Integrate
+#pragma kernel SolveDistanceJacobi
+#pragma kernel ApplyDeltas
+#pragma kernel SolveBounds
 #pragma kernel UpdateVelocities
 
 #define THREADS 256
+
+#pragma target 5.0
+
 
 struct Particle
 {
@@ -14,13 +19,52 @@ struct Particle
     float radius;
 };
 
-RWStructuredBuffer<Particle> _Particles;
+struct DistanceConstraint
+{
+    uint i;
+    uint j;
+    float rest;
+    float compliance;
+};
 
-float3 _BoundsMin;
-float3 _BoundsMax;
-float _DeltaTime;
-float _Gravity;
-uint _ParticleCount;
+RWStructuredBuffer<Particle> particles;
+StructuredBuffer<DistanceConstraint> constraints;
+
+RWStructuredBuffer<uint> deltaX;
+RWStructuredBuffer<uint> deltaY;
+RWStructuredBuffer<uint> deltaZ;
+RWStructuredBuffer<uint> countBuf;
+
+float dt;
+float dts;
+float dts2;
+
+float omega;
+
+float3 gravity;
+float3 boundsMin;
+float3 boundsMax;
+
+uint particleCount, constraintCount;
+
+
+
+
+
+#define ATOMIC_ADD_FLOAT_UAV(UAV, IDX, VAL)            \
+{                                                      \
+    uint _old = UAV[IDX];                              \
+    for (;;)                                           \
+    {                                                  \
+        float _oldF = asfloat(_old);                   \
+        float _newF = _oldF + (VAL);                   \
+        uint  _new  = asuint(_newF);                   \
+        uint  _prev;                                   \
+        InterlockedCompareExchange(UAV[IDX], _old, _new, _prev); \
+        if (_prev == _old) break;                      \
+        _old = _prev;                                  \
+    }                                                  \
+}
 
 
 // ------------------ KERNEL 1: INTEGRATE ------------------
@@ -28,67 +72,128 @@ uint _ParticleCount;
 void Integrate(uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
-    if (i >= _ParticleCount)
+    if (i >= particleCount)
         return;
 
-    Particle p = _Particles[i];
-    if (p.w == 0)
-        return; // static
-
+    Particle p = particles[i];
     p.positionP = p.positionX;
 
-    // gravity
-    p.velocity.y += (-_Gravity) * _DeltaTime;
+    if (p.w > 0)
+    {
+        p.velocity += gravity * dts;
+        p.positionX += p.velocity * dts;
+    }
 
-    // predict
-    p.positionX += p.velocity * _DeltaTime;
-
-    _Particles[i] = p;
+    particles[i] = p;
 }
 
-// ------------------ KERNEL 2: SOLVE CONSTRAINTS ------------------
+// --------- KERNEL 2: DISTANCE ---------------
 [numthreads(THREADS, 1, 1)]
-void SolveConstraints(uint3 id : SV_DispatchThreadID)
+void SolveDistanceJacobi(uint3 tid : SV_DispatchThreadID)
 {
-    uint i = id.x;
-    if (i >= _ParticleCount)
+    uint c = tid.x;
+    if (c >= constraintCount)
         return;
 
-    Particle p = _Particles[i];
+    DistanceConstraint con = constraints[c];
+    uint i = con.i;
+    uint j = con.j;
 
-    // simple AABB bounds
-    if (p.positionX.y - p.radius < _BoundsMin.y)
-        p.positionX.y = _BoundsMin.y + p.radius;
-    if (p.positionX.y + p.radius > _BoundsMax.y)
-        p.positionX.y = _BoundsMax.y - p.radius;
+    Particle pi = particles[i];
+    Particle pj = particles[j];
 
-    if (p.positionX.x - p.radius < _BoundsMin.x)
-        p.positionX.x = _BoundsMin.x + p.radius;
-    if (p.positionX.x + p.radius > _BoundsMax.x)
-        p.positionX.x = _BoundsMax.x - p.radius;
+    if (pi.w == 0 && pj.w == 0)
+        return;
 
-    if (p.positionX.z - p.radius < _BoundsMin.z)
-        p.positionX.z = _BoundsMin.z + p.radius;
-    if (p.positionX.z + p.radius > _BoundsMax.z)
-        p.positionX.z = _BoundsMax.z - p.radius;
+    float3 d = pi.positionX - pj.positionX;
+    float len = length(d);
+    float3 n = (len > 1e-6) ? d / len : float3(0, 0, 0);
+    float C = len - con.rest;
 
-    _Particles[i] = p;
+    // XPBD
+    float wt = pi.w + pj.w;
+    float alphaT = con.compliance / dts2;
+    float dLambda = -C  / (wt + alphaT);
+
+    float3 dxi = +pi.w * dLambda * n;
+    float3 dxj = -pj.w * dLambda * n;
+
+    // Jacobi: atomar akkumulieren + Zähler
+    ATOMIC_ADD_FLOAT_UAV(deltaX, i, dxi.x);
+    ATOMIC_ADD_FLOAT_UAV(deltaY, i, dxi.y);
+    ATOMIC_ADD_FLOAT_UAV(deltaZ, i, dxi.z);
+
+    ATOMIC_ADD_FLOAT_UAV(deltaX, j, dxj.x);
+    ATOMIC_ADD_FLOAT_UAV(deltaY, j, dxj.y);
+    ATOMIC_ADD_FLOAT_UAV(deltaZ, j, dxj.z);
+
+    InterlockedAdd(countBuf[i], 1);
+    InterlockedAdd(countBuf[j], 1);
 }
 
+// ------------- KERNEL 3: APPLY DELTAS (Averaging + ω) ----------
+[numthreads(THREADS, 1, 1)]
+void ApplyDeltas(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
 
-// ------------------ KERNEL 3: UPDATE VELOCITIES ------------------
+    uint n = countBuf[i];
+    if (n > 0)
+    {
+        float3 delta = float3(asfloat(deltaX[i]), asfloat(deltaY[i]), asfloat(deltaZ[i]));
+        Particle p = particles[i];
+        p.positionX += delta * (omega / (float) n); // Δx_i = (ω/n) * ΣΔx
+        particles[i] = p;
+    }
+
+    // Reset
+    deltaX[i] = 0;
+    deltaY[i] = 0;
+    deltaZ[i] = 0;
+    countBuf[i] = 0;
+}
+
+// ------------------ KERNEL 4: BOUNDS ------------------
+[numthreads(THREADS, 1, 1)]
+void SolveBounds(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+
+    if (p.positionX.y - p.radius < boundsMin.y)
+        p.positionX.y = boundsMin.y + p.radius;
+    if (p.positionX.y + p.radius > boundsMax.y)
+        p.positionX.y = boundsMax.y - p.radius;
+
+    if (p.positionX.x - p.radius < boundsMin.x)
+        p.positionX.x = boundsMin.x + p.radius;
+    if (p.positionX.x + p.radius > boundsMax.x)
+        p.positionX.x = boundsMax.x - p.radius;
+
+    if (p.positionX.z - p.radius < boundsMin.z)
+        p.positionX.z = boundsMin.z + p.radius;
+    if (p.positionX.z + p.radius > boundsMax.z)
+        p.positionX.z = boundsMax.z - p.radius;
+
+    particles[i] = p;
+}
+
+// ------------------ KERNEL 5: UPDATE VELOCITIES ------------------
 [numthreads(THREADS, 1, 1)]
 void UpdateVelocities(uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
-    if (i >= _ParticleCount)
+    if (i >= particleCount)
         return;
 
-    Particle p = _Particles[i];
-    if (p.w == 0)
-        return;
+    Particle p = particles[i];
+    if (p.w > 0)
+        p.velocity = (p.positionX - p.positionP) / dts;
 
-    p.velocity = (p.positionX - p.positionP) / _DeltaTime;
-
-    _Particles[i] = p;
+    particles[i] = p;
 }
