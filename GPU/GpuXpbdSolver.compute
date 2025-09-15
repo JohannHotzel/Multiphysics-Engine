@@ -1,13 +1,10 @@
 ﻿#pragma kernel Integrate
 #pragma kernel SolveDistanceJacobi
 #pragma kernel ApplyDeltas
-#pragma kernel SolveBounds
 #pragma kernel UpdateVelocities
 
 #define THREADS 256
-
 #pragma target 5.0
-
 
 struct Particle
 {
@@ -42,14 +39,8 @@ float dts2;
 float omega;
 
 float3 gravity;
-float3 boundsMin;
-float3 boundsMax;
 
 uint particleCount, constraintCount;
-
-
-
-
 
 #define ATOMIC_ADD_FLOAT_UAV(UAV, IDX, VAL)            \
 {                                                      \
@@ -65,7 +56,6 @@ uint particleCount, constraintCount;
         _old = _prev;                                  \
     }                                                  \
 }
-
 
 // ------------------ KERNEL 1: INTEGRATE ------------------
 [numthreads(THREADS, 1, 1)]
@@ -113,12 +103,11 @@ void SolveDistanceJacobi(uint3 tid : SV_DispatchThreadID)
     // XPBD
     float wt = pi.w + pj.w;
     float alphaT = con.compliance / dts2;
-    float dLambda = -C  / (wt + alphaT);
+    float dLambda = -C / (wt + alphaT);
 
     float3 dxi = +pi.w * dLambda * n;
     float3 dxj = -pj.w * dLambda * n;
 
-    // Jacobi: atomar akkumulieren + Zähler
     ATOMIC_ADD_FLOAT_UAV(deltaX, i, dxi.x);
     ATOMIC_ADD_FLOAT_UAV(deltaY, i, dxi.y);
     ATOMIC_ADD_FLOAT_UAV(deltaZ, i, dxi.z);
@@ -155,35 +144,7 @@ void ApplyDeltas(uint3 id : SV_DispatchThreadID)
     countBuf[i] = 0;
 }
 
-// ------------------ KERNEL 4: BOUNDS ------------------
-[numthreads(THREADS, 1, 1)]
-void SolveBounds(uint3 id : SV_DispatchThreadID)
-{
-    uint i = id.x;
-    if (i >= particleCount)
-        return;
-
-    Particle p = particles[i];
-
-    if (p.positionX.y - p.radius < boundsMin.y)
-        p.positionX.y = boundsMin.y + p.radius;
-    if (p.positionX.y + p.radius > boundsMax.y)
-        p.positionX.y = boundsMax.y - p.radius;
-
-    if (p.positionX.x - p.radius < boundsMin.x)
-        p.positionX.x = boundsMin.x + p.radius;
-    if (p.positionX.x + p.radius > boundsMax.x)
-        p.positionX.x = boundsMax.x - p.radius;
-
-    if (p.positionX.z - p.radius < boundsMin.z)
-        p.positionX.z = boundsMin.z + p.radius;
-    if (p.positionX.z + p.radius > boundsMax.z)
-        p.positionX.z = boundsMax.z - p.radius;
-
-    particles[i] = p;
-}
-
-// ------------------ KERNEL 5: UPDATE VELOCITIES ------------------
+// ------------------ KERNEL 4: UPDATE VELOCITIES ------------------
 [numthreads(THREADS, 1, 1)]
 void UpdateVelocities(uint3 id : SV_DispatchThreadID)
 {
