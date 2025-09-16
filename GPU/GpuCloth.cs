@@ -61,7 +61,34 @@ public class GpuCloth : MonoBehaviour
 
         return new ClothData(particles, consTmp.ToArray());
     }
+
+
+    private void OnDrawGizmos()
+    {
+        Vector3 center = transform.position;
+        Vector3 size = new Vector3(width, height, 0.01f);
+        Gizmos.color = Color.yellow;
+        Gizmos.matrix = transform.localToWorldMatrix;
+        Gizmos.DrawWireCube(Vector3.zero, size);
+        Gizmos.matrix = Matrix4x4.identity;
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        Vector3 center = transform.position;
+        Vector3 size = new Vector3(width, height, 0.01f);
+        Gizmos.color = new Color(1f, 1f, 0f, 0.05f);
+        Gizmos.matrix = transform.localToWorldMatrix;
+        Gizmos.DrawCube(Vector3.zero, size);
+        Gizmos.matrix = Matrix4x4.identity;
+
+    }
 }
+
+
+
+
+
 
 public struct ClothData
 {
