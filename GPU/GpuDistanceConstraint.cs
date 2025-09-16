@@ -1,6 +1,6 @@
 using UnityEngine;
 
-struct GpuDistanceConstraint
+public struct GpuDistanceConstraint
 {
     public uint i, j;
     public float rest;

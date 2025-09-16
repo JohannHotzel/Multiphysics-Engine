@@ -1,6 +1,6 @@
 using UnityEngine;
 
-struct GpuParticle
+public struct GpuParticle
 {
     public Vector3 positionP; // previous
     public Vector3 positionX; // current/predicted

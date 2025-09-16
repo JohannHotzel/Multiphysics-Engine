@@ -124,7 +124,7 @@ void SolveDistanceJacobi(uint3 tid : SV_DispatchThreadID)
 [numthreads(THREADS, 1, 1)]
 void ApplyDeltas(uint3 id : SV_DispatchThreadID)
 {
-    uint i = id.x;
+    uint i = id.x; 
     if (i >= particleCount)
         return;
 
