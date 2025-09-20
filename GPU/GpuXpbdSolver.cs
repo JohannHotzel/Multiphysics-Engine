@@ -28,15 +28,13 @@ public class GpuXpbdSolver : MonoBehaviour
     public int ParticleCount => particleCount;
     public int ConstraintCount => constraintCount;
 
-    List<GpuParticle> allParticlesList = new List<GpuParticle>();
-    List<GpuDistanceConstraint> allConstraintsList = new List<GpuDistanceConstraint>();
+    List<GpuCloth> cloths = new List<GpuCloth>();
 
-    [System.Serializable]
-    public struct ClothRange { public GpuCloth cloth; public int start; public int count; }
-    public List<ClothRange> clothRanges = new List<ClothRange>();
+    readonly List<GpuParticle> allParticlesList = new List<GpuParticle>();
+    readonly List<GpuDistanceConstraint> allConstraintsList = new List<GpuDistanceConstraint>();
 
+    private GpuParticle[] _tmpSubset;
 
-    // Initialization
     void Start()
     {
         if (compute == null)
@@ -53,8 +51,6 @@ public class GpuXpbdSolver : MonoBehaviour
         RegisterAllCloths();
         InitializeBuffers();
     }
-
-    // Buffer setup
     void InitializeBuffers()
     {
         ReleaseAll();
@@ -71,12 +67,11 @@ public class GpuXpbdSolver : MonoBehaviour
             return;
         }
 
-        // GPU buffers
-        int particleStride = 12 * sizeof(float); // float3*3 + float*3 = 48
+        int particleStride = 12 * sizeof(float); // float3*3 + float*3
         ParticleBuffer = new ComputeBuffer(particleCount, particleStride, ComputeBufferType.Structured);
         ParticleBuffer.SetData(allParticles);
 
-        int conStride = sizeof(uint) * 2 + sizeof(float) * 2; // 16
+        int conStride = sizeof(uint) * 2 + sizeof(float) * 2;
         if (constraintCount > 0)
         {
             ConstraintBuffer = new ComputeBuffer(constraintCount, conStride, ComputeBufferType.Structured);
@@ -89,7 +84,6 @@ public class GpuXpbdSolver : MonoBehaviour
         CountBuffer = new ComputeBuffer(particleCount, sizeof(uint), ComputeBufferType.Structured);
         ZeroAccumulators();
 
-        // Bindings
         foreach (int k in new[] { kIntegrate, kSolveDistanceJacobi, kApplyDeltas, kUpdateVelocities })
             compute.SetBuffer(k, "particles", ParticleBuffer);
 
@@ -110,10 +104,10 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.SetInt("particleCount", particleCount);
         compute.SetInt("constraintCount", constraintCount);
 
-        Debug.Log($"[GpuXpbdSolver] Registered: {particleCount} particles, {constraintCount} constraints (arrays).");
+        Debug.Log($"[GpuXpbdSolver] Registered: {particleCount} particles, {constraintCount} constraints.");
     }
 
-    // Simulation
+
     void FixedUpdate()
     {
         if (compute == null || ParticleBuffer == null) return;
@@ -131,6 +125,9 @@ public class GpuXpbdSolver : MonoBehaviour
         int groupsP = Mathf.CeilToInt(particleCount / (float)THREADS);
         int groupsC = Mathf.CeilToInt(Mathf.Max(1, constraintCount) / (float)THREADS);
 
+
+        UpdateClothBounds();
+
         for (int s = 0; s < substeps; s++)
         {
             compute.Dispatch(kIntegrate, groupsP, 1, 1);
@@ -141,10 +138,38 @@ public class GpuXpbdSolver : MonoBehaviour
             }
             compute.Dispatch(kUpdateVelocities, groupsP, 1, 1);
         }
+
+       
+    }
+    public void UpdateClothBounds()
+    {
+        if (ParticleBuffer == null) return;
+
+        foreach (var cloth in cloths)
+        {
+            int count = cloth.count;
+            if (count <= 0) continue;
+
+            if (_tmpSubset == null || _tmpSubset.Length < count)
+                _tmpSubset = new GpuParticle[Mathf.NextPowerOfTwo(count)];
+
+            ParticleBuffer.GetData(_tmpSubset, 0, cloth.startIndex, count);
+
+            Vector3 mn = _tmpSubset[0].positionX;
+            Vector3 mx = mn;
+            for (int i = 1; i < count; i++)
+            {
+                var p = _tmpSubset[i].positionX;
+                mn = Vector3.Min(mn, p);
+                mx = Vector3.Max(mx, p);
+            }
+
+            cloth.aabbMin = mn;
+            cloth.aabbMax = mx;
+        }
     }
 
 
-    // Cleanup
     void OnDestroy() => ReleaseAll();
     void ZeroAccumulators()
     {
@@ -165,47 +190,38 @@ public class GpuXpbdSolver : MonoBehaviour
     }
 
 
-
-    // Cloth registration
-    public void RegisterAllCloths()
+    void RegisterAllCloths()
     {
-        var cloths = FindObjectsByType<GpuCloth>(FindObjectsSortMode.None);
-        var packages = new List<ClothData>(cloths.Length);
-        clothRanges.Clear();
+        cloths.Clear();
+        allParticlesList.Clear();
+        allConstraintsList.Clear();
+
+        var found = FindObjectsByType<GpuCloth>(FindObjectsSortMode.None);
+        cloths.AddRange(found);
 
         int runningOffset = 0;
+
         foreach (var c in cloths)
         {
-            ClothData data = c.Build(particleRadiusSim, compliance);
-            packages.Add(data);
-            clothRanges.Add(new ClothRange { cloth = c, start = runningOffset, count = data.particles.Length });
-            runningOffset += data.particles.Length;
-        }
+            c.Build(out var particles, out var constraints, particleRadiusSim, compliance);
 
-        RegisterCloths(packages);
-    }
-    public void RegisterCloths(IEnumerable<ClothData> cloths)
-    {
-        ReleaseAll();
+            c.startIndex = runningOffset;
+            c.count = particles.Length;
 
-        int offset = 0;
-        foreach (var cd in cloths)
-        {
-            allParticlesList.AddRange(cd.particles);
+            allParticlesList.AddRange(particles);
 
-            var cons = cd.constraints;
-            for (int k = 0; k < cons.Length; k++)
+            for (int k = 0; k < constraints.Length; k++)
             {
-                var c = cons[k];
+                var con = constraints[k];
                 allConstraintsList.Add(new GpuDistanceConstraint(
-                    (uint)(c.i + (uint)offset),
-                    (uint)(c.j + (uint)offset),
-                    c.rest,
-                    c.compliance
+                    (uint)(con.i + (uint)runningOffset),
+                    (uint)(con.j + (uint)runningOffset),
+                    con.rest,
+                    con.compliance
                 ));
             }
 
-            offset += cd.particles.Length;
+            runningOffset += particles.Length;
         }
     }
 }

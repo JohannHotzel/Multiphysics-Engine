@@ -16,13 +16,29 @@ public class GpuCloth : MonoBehaviour
     public float? particleRadiusOverride;
     public float? complianceOverride;
 
-    public ClothData Build(float defaultRadius, float defaultCompliance)
+    [HideInInspector] public int startIndex;  
+    [HideInInspector] public int count;      
+
+    [HideInInspector] public Vector3 aabbMin = Vector3.positiveInfinity;
+    [HideInInspector] public Vector3 aabbMax = Vector3.negativeInfinity;
+
+    public Bounds CurrentBounds
+    {
+        get
+        {
+            if (float.IsInfinity(aabbMin.x) || float.IsInfinity(aabbMax.x))
+                return new Bounds(transform.position, Vector3.zero);
+            return new Bounds((aabbMin + aabbMax) * 0.5f, aabbMax - aabbMin);
+        }
+    }
+
+    public void Build(out GpuParticle[] particles, out GpuDistanceConstraint[] constraints, float defaultRadius, float defaultCompliance)
     {
         int nX = Mathf.Max(1, numParticlesX);
         int nY = Mathf.Max(1, numParticlesY);
         int particleCount = nX * nY;
 
-        var particles = new GpuParticle[particleCount];
+        particles = new GpuParticle[particleCount];
 
         float dx = (nX > 1) ? width / (nX - 1) : 0f;
         float dy = (nY > 1) ? height / (nY - 1) : 0f;
@@ -50,49 +66,49 @@ public class GpuCloth : MonoBehaviour
             }
         }
 
-        var consTmp = new List<GpuDistanceConstraint>();
+        var cons = new List<GpuDistanceConstraint>();
         for (int y = 0; y < nY; y++)
             for (int x = 0; x < nX; x++)
             {
                 int i = y * nX + x;
-                if (x + 1 < nX) consTmp.Add(new GpuDistanceConstraint((uint)i, (uint)(i + 1), dx, compliance));
-                if (y + 1 < nY) consTmp.Add(new GpuDistanceConstraint((uint)i, (uint)(i + nX), dy, compliance));
+                if (x + 1 < nX) cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + 1), dx, compliance));
+                if (y + 1 < nY) cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + nX), dy, compliance));
             }
 
-        return new ClothData(particles, consTmp.ToArray());
+        constraints = cons.ToArray();
     }
 
 
     private void OnDrawGizmos()
     {
-        Vector3 center = transform.position;
         Vector3 size = new Vector3(width, height, 0.01f);
+
         Gizmos.color = Color.yellow;
         Gizmos.matrix = transform.localToWorldMatrix;
         Gizmos.DrawWireCube(Vector3.zero, size);
         Gizmos.matrix = Matrix4x4.identity;
+
+        var b = CurrentBounds;
+        if (b.size.sqrMagnitude > 0f)
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireCube(b.center, b.size);
+        }
     }
 
     private void OnDrawGizmosSelected()
     {
-        Vector3 center = transform.position;
         Vector3 size = new Vector3(width, height, 0.01f);
         Gizmos.color = new Color(1f, 1f, 0f, 0.05f);
         Gizmos.matrix = transform.localToWorldMatrix;
         Gizmos.DrawCube(Vector3.zero, size);
         Gizmos.matrix = Matrix4x4.identity;
 
+        var b = CurrentBounds;
+        if (b.size.sqrMagnitude > 0f)
+        {
+            Gizmos.color = new Color(0f, 1f, 1f, 0.1f);
+            Gizmos.DrawCube(b.center, b.size);
+        }
     }
-}
-
-
-
-
-
-
-public struct ClothData
-{
-    public GpuParticle[] particles;
-    public GpuDistanceConstraint[] constraints;
-    public ClothData(GpuParticle[] p, GpuDistanceConstraint[] c) { particles = p; constraints = c; }
 }

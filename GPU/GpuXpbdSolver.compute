@@ -57,6 +57,27 @@ uint particleCount, constraintCount;
     }                                                  \
 }
 
+
+// ------------------ KERNEL 0: PREDICT ------------------
+[numthreads(THREADS, 1, 1)]
+void Predict(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    p.positionP = p.positionX;
+
+    if (p.w > 0)
+    {
+        p.velocity += gravity * dts;
+        p.positionX += p.velocity * dts;
+    }
+
+    particles[i] = p;
+}
+
 // ------------------ KERNEL 1: INTEGRATE ------------------
 [numthreads(THREADS, 1, 1)]
 void Integrate(uint3 id : SV_DispatchThreadID)
