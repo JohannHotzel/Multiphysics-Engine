@@ -18,9 +18,16 @@ public class GpuXpbdSolver : MonoBehaviour
 
     const int THREADS = 256;
     int particleCount, constraintCount;
+    public int ParticleCount => particleCount;
+    public int ConstraintCount => constraintCount;
 
+    //Solver Kernels
     int kPredict, kIntegrate, kSolveDistanceJacobi, kApplyDeltas, kUpdateVelocities;
 
+    //Collision Kernels
+    int kBuildSphereConstraints, kSolveCollisionConstraints;
+
+    //Solver Buffers
     public ComputeBuffer ParticleBuffer { get; private set; }
     public ComputeBuffer ConstraintBuffer { get; private set; }
     public ComputeBuffer DeltaXBuffer { get; private set; }
@@ -28,8 +35,14 @@ public class GpuXpbdSolver : MonoBehaviour
     public ComputeBuffer DeltaZBuffer { get; private set; }
     public ComputeBuffer CountBuffer { get; private set; }
 
-    public int ParticleCount => particleCount;
-    public int ConstraintCount => constraintCount;
+    //Collision Buffers
+    public ComputeBuffer SphereBuffer { get; private set; }
+    public ComputeBuffer CollisionConstraintsBuffer { get; private set; }
+    public ComputeBuffer CollisionConstraintCountBuf { get; private set; }
+
+
+
+
 
     List<GpuCloth> cloths = new List<GpuCloth>();
 
@@ -37,6 +50,8 @@ public class GpuXpbdSolver : MonoBehaviour
     readonly List<GpuDistanceConstraint> allConstraintsList = new List<GpuDistanceConstraint>();
 
     private GpuParticle[] _tmpSubset;
+    private List<Collider> _tmpColliders = new List<Collider>(); //All Colliders
+    List<GpuSphereCollider> _tmpSphereColliders = new List<GpuSphereCollider>(); //Sphere Colliders
 
     void Start()
     {
@@ -51,6 +66,9 @@ public class GpuXpbdSolver : MonoBehaviour
         kSolveDistanceJacobi = compute.FindKernel("SolveDistanceJacobi");
         kApplyDeltas = compute.FindKernel("ApplyDeltas");
         kUpdateVelocities = compute.FindKernel("UpdateVelocities");
+
+        kBuildSphereConstraints = compute.FindKernel("BuildSphereConstraints");
+        kSolveCollisionConstraints = compute.FindKernel("SolveCollisionConstraints");
 
         RegisterAllCloths();
         InitializeBuffers();
@@ -175,9 +193,9 @@ public class GpuXpbdSolver : MonoBehaviour
             cloth.aabbMax = mx;
         }
     }
-    public List<Collider> GetBoundOverlaps()
+    public void GetBoundOverlaps()
     {
-        List<Collider> results = new List<Collider>();
+        _tmpColliders.Clear(); 
 
         foreach (var cloth in cloths)
         {
@@ -193,10 +211,37 @@ public class GpuXpbdSolver : MonoBehaviour
                 Quaternion.identity
             );
 
-            results.AddRange(hits);
+            _tmpColliders.AddRange(hits);
         }
 
-        return results.Distinct().ToList();
+        _tmpColliders.Distinct().ToList();
+    }
+    public void UpdateCollisionBuffers()
+    {
+        _tmpSphereColliders.Clear();
+
+        foreach (Collider col in _tmpColliders)
+        {
+            if (col is SphereCollider sc)
+            {
+                Transform t = sc.transform;
+                Vector3 center = t.TransformPoint(sc.center);
+                Vector3 s = t.lossyScale;
+                float radius = sc.radius * Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z));
+
+                _tmpSphereColliders.Add(new GpuSphereCollider(center, radius));
+            }
+        }
+
+        int sphereCount = _tmpSphereColliders.Count;
+        int stride = sizeof(float) * 4;
+
+        SphereBuffer.Release();
+        SphereBuffer = new ComputeBuffer(sphereCount, stride, ComputeBufferType.Structured);
+        SphereBuffer.SetData(_tmpSphereColliders.ToArray());
+
+        compute.SetInt("sphereCount", sphereCount);
+        compute.SetBuffer(kBuildSphereConstraints, "spheres", SphereBuffer);
     }
 
 
