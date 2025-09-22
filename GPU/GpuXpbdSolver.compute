@@ -4,6 +4,10 @@
 #pragma kernel ApplyDeltas
 #pragma kernel UpdateVelocities
 
+//Collsion
+#pragma kernel CollideSpheres
+
+
 #define THREADS 256
 #pragma target 5.0
 
@@ -26,23 +30,29 @@ struct DistanceConstraint
     float compliance;
 };
 
+struct SphereCollider
+{
+    float3 center;
+    float radius;
+};
+
+
+
 RWStructuredBuffer<Particle> particles;
 StructuredBuffer<DistanceConstraint> constraints;
+StructuredBuffer<SphereCollider> spheres;
 
 RWStructuredBuffer<uint> deltaX;
 RWStructuredBuffer<uint> deltaY;
 RWStructuredBuffer<uint> deltaZ;
 RWStructuredBuffer<uint> countBuf;
 
-float dt;
-float dts;
-float dts2;
-
-float omega;
-
+int particleCount;
+int constraintCount;
+int sphereCount;
+float dt, dts, dts2;
 float3 gravity;
-
-uint particleCount, constraintCount;
+float omega;
 
 #define ATOMIC_ADD_FLOAT_UAV(UAV, IDX, VAL)            \
 {                                                      \
@@ -60,7 +70,7 @@ uint particleCount, constraintCount;
 }
 
 
-// ------------------ KERNEL 0: PREDICT ------------------ (TODO: Code Maybe faluty)
+// ------------------ KERNEL 0: PREDICT ------------------ 
 [numthreads(THREADS, 1, 1)]
 void Predict(uint3 id : SV_DispatchThreadID)
 {
@@ -117,8 +127,13 @@ void SolveDistanceJacobi(uint3 tid : SV_DispatchThreadID)
 
     float3 d = pi.positionX - pj.positionX;
     float len = length(d);
-    float3 n = (len > 1e-6) ? d / len : float3(0, 0, 0);
+    
+    if (len <= 1e-6f)
+        return;
+
+    float3 n = d / len;
     float C = len - con.rest;
+
 
     // XPBD
     float wt = pi.w + pj.w;
@@ -176,5 +191,43 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID)
     if (p.w > 0)
         p.velocity = (p.positionX - p.positionP) / dts;
 
+    particles[i] = p;
+}
+
+// ------------------ KERNEL 5: COLLIDE SPHERES ------------------
+[numthreads(THREADS, 1, 1)]
+void CollideSpheres(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f || sphereCount <= 0)
+    {
+        particles[i] = p;
+        return;
+    }
+
+    float3 x = p.positionX;
+
+    
+    for (int s = 0; s < sphereCount; s++)
+    {
+        SphereCollider sc = spheres[s];
+        float3 d = x - sc.center;
+        float dist = length(d);
+        float r = sc.radius + p.radius;
+
+        if (dist < r)
+        {
+            float3 n = d / dist;
+            float push = r - dist;
+
+            x += n * push;
+        }
+    }
+
+    p.positionX = x;
     particles[i] = p;
 }
