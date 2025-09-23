@@ -2,16 +2,10 @@ using UnityEngine;
 
 public struct GpuCollisionConstraint
 {
-    public int particleIndex;
-    public Vector3 point;
+    public Vector3 target; 
     public Vector3 normal;
-    public float radius;
+    public float radius;   
+    public uint valid;   
 
-    public GpuCollisionConstraint(int pIdx, Vector3 pt, Vector3 n, float r)
-    {
-        particleIndex = pIdx;
-        point = pt;
-        normal = n;
-        radius = r;
-    }
+    public const int Stride = (3 + 3 + 1) * sizeof(float) + sizeof(uint); // 12+12+4+4 = 32
 }

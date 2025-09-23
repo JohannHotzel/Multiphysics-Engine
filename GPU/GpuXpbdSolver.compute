@@ -5,7 +5,8 @@
 #pragma kernel UpdateVelocities
 
 //Collsion
-#pragma kernel CollideSpheres
+#pragma kernel BuildCollisionConstraints
+#pragma kernel SolveCollisionConstraints
 
 
 #define THREADS 256
@@ -36,6 +37,13 @@ struct SphereCollider
     float radius;
 };
 
+struct CollisionConstraint
+{
+    float3 target; 
+    float3 normal;
+    float radius;   
+    uint valid; 
+};
 
 
 RWStructuredBuffer<Particle> particles;
@@ -46,6 +54,8 @@ RWStructuredBuffer<uint> deltaX;
 RWStructuredBuffer<uint> deltaY;
 RWStructuredBuffer<uint> deltaZ;
 RWStructuredBuffer<uint> countBuf;
+
+RWStructuredBuffer<CollisionConstraint> collisionConstraints; 
 
 int particleCount;
 int constraintCount;
@@ -194,40 +204,82 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID)
     particles[i] = p;
 }
 
-// ------------------ KERNEL 5: COLLIDE SPHERES ------------------
+
+
+
+// ------------------ BuildCollisionConstraints (per particle) ------------------
 [numthreads(THREADS, 1, 1)]
-void CollideSpheres(uint3 id : SV_DispatchThreadID)
+void BuildCollisionConstraints(uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
     if (i >= particleCount)
         return;
 
-    Particle p = particles[i];
-    if (p.w == 0.0f || sphereCount <= 0)
+    CollisionConstraint cc;
+    cc.target = 0;
+    cc.normal = 0;
+    cc.radius = 0;
+    cc.valid = 0;
+
+    if (sphereCount > 0)
     {
-        particles[i] = p;
-        return;
-    }
-
-    float3 x = p.positionX;
-
-    
-    for (int s = 0; s < sphereCount; s++)
-    {
-        SphereCollider sc = spheres[s];
-        float3 d = x - sc.center;
-        float dist = length(d);
-        float r = sc.radius + p.radius;
-
-        if (dist < r)
+        Particle p = particles[i];
+        if (p.w > 0.0f)
         {
-            float3 n = d / dist;
-            float push = r - dist;
+            float3 x = p.positionX;
+            float bestPen = 0.0f;
 
-            x += n * push;
+            // finde maximale Penetration
+            [loop]
+            for (int s = 0; s < sphereCount; s++)
+            {
+                SphereCollider sc = spheres[s];
+                float3 d = x - sc.center;
+                float dist = length(d);
+                float r = sc.radius + p.radius;
+                float pen = r - dist;
+                if (pen > bestPen)
+                {
+                    float3 n = (dist > 1e-6f) ? (d / dist) : float3(0, 1, 0); 
+                    cc.target = sc.center + n * sc.radius;
+                    cc.radius = p.radius;
+                    cc.normal = n;
+                    cc.valid = 1;
+                    bestPen = pen;
+                }
+            }
         }
     }
 
-    p.positionX = x;
-    particles[i] = p;
+    collisionConstraints[i] = cc;
 }
+
+// ------------------ SolveCollisionConstraints (per particle) ------------------
+[numthreads(THREADS, 1, 1)]
+void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    CollisionConstraint cc = collisionConstraints[i];
+    if (cc.valid == 0)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    float c = dot(p.positionX - cc.target, cc.normal) - cc.radius;
+    p.positionX -= cc.normal * c;
+
+    particles[i] = p;
+
+    cc.valid = 0;
+    collisionConstraints[i] = cc;
+}
+
+
+
+
+
