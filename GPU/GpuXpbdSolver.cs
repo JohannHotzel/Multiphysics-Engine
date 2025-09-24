@@ -176,7 +176,6 @@ public class GpuXpbdSolver : MonoBehaviour
 
             compute.Dispatch(kSolveCollisionConstraints, groupsP, 1, 1);
 
-
             compute.Dispatch(kUpdateVelocities, groupsP, 1, 1);
         }
     }
