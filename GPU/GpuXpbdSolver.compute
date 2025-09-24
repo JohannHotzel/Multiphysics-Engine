@@ -229,7 +229,6 @@ void BuildCollisionConstraints(uint3 id : SV_DispatchThreadID)
             float3 x = p.positionX;
             float bestPen = 0.0f;
 
-            // finde maximale Penetration
             [loop]
             for (int s = 0; s < sphereCount; s++)
             {
@@ -270,13 +269,13 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
     if (p.w == 0.0f)
         return;
 
-    float c = dot(p.positionX - cc.target, cc.normal) - cc.radius;
-    p.positionX -= cc.normal * c;
+    float C = dot(p.positionX - cc.target, cc.normal) - cc.radius;
+    if (C < 0.0f)
+    {
+        p.positionX -= cc.normal * C;
+    }
 
     particles[i] = p;
-
-    cc.valid = 0;
-    collisionConstraints[i] = cc;
 }
 
 

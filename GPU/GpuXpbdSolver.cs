@@ -169,11 +169,8 @@ public class GpuXpbdSolver : MonoBehaviour
                 compute.Dispatch(kApplyDeltas, groupsP, 1, 1);
             }
 
-            if (SphereBuffer != null)
-            {
-                compute.Dispatch(kBuildCollisionConstraints, groupsP, 1, 1);
-            }
-
+            if (SphereBuffer != null) compute.Dispatch(kBuildCollisionConstraints, groupsP, 1, 1);
+           
             compute.Dispatch(kSolveCollisionConstraints, groupsP, 1, 1);
 
             compute.Dispatch(kUpdateVelocities, groupsP, 1, 1);
