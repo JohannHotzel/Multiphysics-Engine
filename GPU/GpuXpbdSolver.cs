@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using UnityEngine;
 
 public class GpuXpbdSolver : MonoBehaviour
@@ -44,8 +43,12 @@ public class GpuXpbdSolver : MonoBehaviour
     readonly List<GpuParticle> allParticlesList = new List<GpuParticle>();
     readonly List<GpuDistanceConstraint> allConstraintsList = new List<GpuDistanceConstraint>();
 
+    //Particle Subset
     private GpuParticle[] _tmpSubset;
-    private readonly List<Collider> _tmpColliders = new List<Collider>();
+
+    //Collision Detection
+    private Collider[] _overlapBuffer = new Collider[64]; 
+    private readonly HashSet<Collider> _tmpColliders = new HashSet<Collider>();
     private readonly List<GpuSphereCollider> _tmpSphereColliders = new List<GpuSphereCollider>();
 
     void Start()
@@ -205,23 +208,25 @@ public class GpuXpbdSolver : MonoBehaviour
     }
     void GetBoundOverlaps()
     {
+        //TODO: Use NonAlloc Later 
         _tmpColliders.Clear();
 
         foreach (var cloth in cloths)
         {
             Bounds bounds = cloth.CurrentBounds;
             bounds.Expand(boundsPadding);
-            if (bounds.size.x <= 0f || bounds.size.y <= 0f || bounds.size.z <= 0f) continue;
+
+            if (bounds.size.x <= 0f || bounds.size.y <= 0f || bounds.size.z <= 0f)
+                continue;
 
             var hits = Physics.OverlapBox(bounds.center, bounds.extents, Quaternion.identity);
-            if (hits != null && hits.Length > 0) _tmpColliders.AddRange(hits);
-        }
-        
-        if (_tmpColliders.Count > 1)
-        {
-            var distinct = _tmpColliders.Distinct().ToList();
-            _tmpColliders.Clear();
-            _tmpColliders.AddRange(distinct);
+            if (hits == null || hits.Length == 0) continue;
+
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var h = hits[i];
+                if (h != null) _tmpColliders.Add(h);
+            }
         }
     }
     void UpdateCollisionBuffers()
