@@ -7,9 +7,11 @@
 //Collsion
 #pragma kernel BuildCollisionConstraints
 #pragma kernel SolveCollisionConstraints
+#pragma kernel ResetCollisionCounts
 
 
 #define THREADS 256
+#define MAX_COLLISIONS 8  // muss zu C# passen
 #pragma target 5.0
 
 struct Particle
@@ -42,7 +44,6 @@ struct CollisionConstraint
     float3 target; 
     float3 normal;
     float radius;   
-    uint valid; 
 };
 
 
@@ -55,7 +56,8 @@ RWStructuredBuffer<uint> deltaY;
 RWStructuredBuffer<uint> deltaZ;
 RWStructuredBuffer<uint> countBuf;
 
-RWStructuredBuffer<CollisionConstraint> collisionConstraints; 
+RWStructuredBuffer<CollisionConstraint> collisionConstraints;
+RWStructuredBuffer<uint> collisionCounts; 
 
 int particleCount;
 int constraintCount;
@@ -214,43 +216,44 @@ void BuildCollisionConstraints(uint3 id : SV_DispatchThreadID)
     uint i = id.x;
     if (i >= particleCount)
         return;
+    
+    if (sphereCount == 0)
+        return;
 
-    CollisionConstraint cc;
-    cc.target = 0;
-    cc.normal = 0;
-    cc.radius = 0;
-    cc.valid = 0;
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
 
-    if (sphereCount > 0)
+    [loop]
+    for (int s = 0; s < sphereCount; s++)
     {
-        Particle p = particles[i];
-        if (p.w > 0.0f)
-        {
-            float3 x = p.positionX;
-            float bestPen = 0.0f;
+        SphereCollider sc = spheres[s];
 
-            [loop]
-            for (int s = 0; s < sphereCount; s++)
+        float3 x = p.positionX;
+        float3 d = x - sc.center;
+        float dist = length(d);
+        float r = sc.radius + p.radius;
+        float pen = r - dist;
+
+        if (pen > 0.0f)
+        {
+            uint idx;
+            InterlockedAdd(collisionCounts[i], 1, idx);
+            if (idx < MAX_COLLISIONS)
             {
-                SphereCollider sc = spheres[s];
-                float3 d = x - sc.center;
-                float dist = length(d);
-                float r = sc.radius + p.radius;
-                float pen = r - dist;
-                if (pen > bestPen)
-                {
-                    float3 n = (dist > 1e-6f) ? (d / dist) : float3(0, 1, 0); 
-                    cc.target = sc.center + n * sc.radius;
-                    cc.radius = p.radius;
-                    cc.normal = n;
-                    cc.valid = 1;
-                    bestPen = pen;
-                }
+                float3 n = (dist > 1e-6f) ? (d / dist) : float3(0, 1, 0);
+
+                uint writeIndex = i * MAX_COLLISIONS + idx;
+
+                CollisionConstraint cc;
+                cc.target = sc.center + n * sc.radius;
+                cc.normal = n;
+                cc.radius = p.radius;
+
+                collisionConstraints[writeIndex] = cc;
             }
         }
     }
-
-    collisionConstraints[i] = cc;
 }
 
 // ------------------ SolveCollisionConstraints (per particle) ------------------
@@ -261,21 +264,39 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
     if (i >= particleCount)
         return;
 
-    CollisionConstraint cc = collisionConstraints[i];
-    if (cc.valid == 0)
-        return;
-
     Particle p = particles[i];
     if (p.w == 0.0f)
         return;
 
-    float C = dot(p.positionX - cc.target, cc.normal) - cc.radius;
-    if (C < 0.0f)
+    uint n = collisionCounts[i];
+    if (n == 0)
+        return;
+    n = (n > MAX_COLLISIONS) ? MAX_COLLISIONS : n;
+
+    for (uint k = 0; k < n; k++)
     {
-        p.positionX -= cc.normal * C;
+        uint readIndex = i * MAX_COLLISIONS + k;
+        CollisionConstraint cc = collisionConstraints[readIndex];
+
+        float C = dot(p.positionX - cc.target, cc.normal) - cc.radius;
+        if (C < 0.0f)
+        {
+            p.positionX -= cc.normal * C;
+        }
     }
 
     particles[i] = p;
+}
+
+// ------------------ Reset Collision Counts ------------------
+[numthreads(THREADS, 1, 1)]
+void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+    
+    collisionCounts[i] = 0;
 }
 
 

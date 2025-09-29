@@ -31,6 +31,7 @@ public class GpuXpbdSolver : MonoBehaviour
     public ComputeBuffer DeltaXBuffer, DeltaYBuffer, DeltaZBuffer, CountBuffer;
     public ComputeBuffer SphereBuffer;
     public ComputeBuffer CollisionConstraintBuffer;
+    public ComputeBuffer CollisionCountBuffer;
     #endregion
 
     #region === Constants / IDs ===
@@ -46,6 +47,7 @@ public class GpuXpbdSolver : MonoBehaviour
         public static int UpdateVelocities;
         public static int BuildCollisionConstraints;
         public static int SolveCollisionConstraints;
+        public static int ResetCollisionCounts;
     }
 
     // Shader property IDs
@@ -58,6 +60,7 @@ public class GpuXpbdSolver : MonoBehaviour
         public static readonly int DeltaZ = Shader.PropertyToID("deltaZ");
         public static readonly int CountBuf = Shader.PropertyToID("countBuf");
         public static readonly int CollisionConstraints = Shader.PropertyToID("collisionConstraints");
+        public static readonly int CollisionCounts = Shader.PropertyToID("collisionCounts");
         public static readonly int Spheres = Shader.PropertyToID("spheres");
 
         public static readonly int ParticleCount = Shader.PropertyToID("particleCount");
@@ -106,6 +109,7 @@ public class GpuXpbdSolver : MonoBehaviour
         Kid.UpdateVelocities = compute.FindKernel("UpdateVelocities");
         Kid.BuildCollisionConstraints = compute.FindKernel("BuildCollisionConstraints");
         Kid.SolveCollisionConstraints = compute.FindKernel("SolveCollisionConstraints");
+        Kid.ResetCollisionCounts = compute.FindKernel("ResetCollisionCounts");
 
         RegisterAllCloths();
         InitializeBuffers();
@@ -133,6 +137,8 @@ public class GpuXpbdSolver : MonoBehaviour
         UpdateClothBounds();
         GetBoundOverlaps();
         UpdateCollisionBuffers();
+
+        compute.Dispatch(Kid.ResetCollisionCounts, groupsP, 1, 1);
 
         for (int s = 0; s < substeps; s++)
         {
@@ -246,11 +252,20 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.SetBuffer(Kid.ApplyDeltas, Sid.CountBuf, CountBuffer);
 
         // Collision constraints (per particle)
+        const int MAX_COLLISIONS = 8;
         int collisionStride = GpuCollisionConstraint.Stride;
-        CollisionConstraintBuffer = new ComputeBuffer(particleCount, collisionStride, ComputeBufferType.Structured);
+        CollisionConstraintBuffer = new ComputeBuffer(particleCount * MAX_COLLISIONS, collisionStride, ComputeBufferType.Structured);
+        CollisionCountBuffer = new ComputeBuffer(particleCount, sizeof(uint), ComputeBufferType.Structured);
+        CollisionCountBuffer.SetData(new uint[particleCount]);
+
         compute.SetBuffer(Kid.BuildCollisionConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
+        compute.SetBuffer(Kid.BuildCollisionConstraints, Sid.CollisionCounts, CollisionCountBuffer);
+
         compute.SetBuffer(Kid.SolveCollisionConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
-        ResetCollisionConstraints();
+        compute.SetBuffer(Kid.SolveCollisionConstraints, Sid.CollisionCounts, CollisionCountBuffer);
+
+        compute.SetBuffer(Kid.ResetCollisionCounts, Sid.CollisionCounts, CollisionCountBuffer);
+
 
         compute.SetInt(Sid.ParticleCount, particleCount);
         compute.SetInt(Sid.ConstraintCount, constraintCount);
@@ -274,6 +289,7 @@ public class GpuXpbdSolver : MonoBehaviour
         SafeRelease(ref CountBuffer);
         SafeRelease(ref SphereBuffer);
         SafeRelease(ref CollisionConstraintBuffer);
+        SafeRelease(ref CollisionCountBuffer);
     }
     #endregion
 
@@ -317,10 +333,7 @@ public class GpuXpbdSolver : MonoBehaviour
             b.Expand(boundsPadding);
             if (b.size.x <= 0f || b.size.y <= 0f || b.size.z <= 0f) continue;
 
-            var hits = Physics.OverlapBox(
-                b.center, b.extents, Quaternion.identity,
-                overlapLayerMask, triggerInteraction
-            );
+            var hits = Physics.OverlapBox(b.center, b.extents, Quaternion.identity, overlapLayerMask, triggerInteraction);
             if (hits == null || hits.Length == 0) continue;
 
             for (int i = 0; i < hits.Length; i++)
@@ -362,12 +375,7 @@ public class GpuXpbdSolver : MonoBehaviour
 
         compute.SetBuffer(Kid.BuildCollisionConstraints, Sid.Spheres, SphereBuffer);
     }
-    private void ResetCollisionConstraints()
-    {
-        if (CollisionConstraintBuffer == null || particleCount <= 0) return;
-        var zeros = new GpuCollisionConstraint[particleCount];
-        CollisionConstraintBuffer.SetData(zeros);
-    }
+
     private void ZeroAccumulators()
     {
         if (particleCount <= 0) return;
