@@ -10,6 +10,8 @@ public struct GpuParticle
     public float w;
     public float radius;
 
+    public const int Stride = 15 * sizeof(float); // float3*4 + float*3
+
     public GpuParticle(Vector3 pos, float mass, float rad)
     {
         positionP = pos;

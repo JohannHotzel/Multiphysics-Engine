@@ -6,6 +6,8 @@ public struct GpuDistanceConstraint
     public float rest;
     public float compliance;
 
+    public const int Stride = sizeof(uint) * 2 + sizeof(float) * 2; // float*2 + float3*2 = 20 bytes
+
     public GpuDistanceConstraint(uint a, uint b, float r, float c)
     {
         i = a;

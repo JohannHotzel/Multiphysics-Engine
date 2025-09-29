@@ -212,12 +212,12 @@ public class GpuXpbdSolver : MonoBehaviour
         }
 
         // Particles
-        int particleStride = 15 * sizeof(float); // float3*4 + float*3
+        int particleStride = GpuParticle.Stride;
         ParticleBuffer = new ComputeBuffer(particleCount, particleStride, ComputeBufferType.Structured);
         ParticleBuffer.SetData(allParticles);
 
         // Constraints
-        int conStride = sizeof(uint) * 2 + sizeof(float) * 2;
+        int conStride = GpuDistanceConstraint.Stride;
         if (constraintCount > 0)
         {
             ConstraintBuffer = new ComputeBuffer(constraintCount, conStride, ComputeBufferType.Structured);
@@ -369,7 +369,7 @@ public class GpuXpbdSolver : MonoBehaviour
         }
 
         SafeRelease(ref SphereBuffer);
-        int stride = sizeof(float) * 4; // float3 + float
+        int stride = GpuSphereCollider.Stride;
         SphereBuffer = new ComputeBuffer(sphereCount, stride, ComputeBufferType.Structured);
         SphereBuffer.SetData(_sphereCollidersScratch);
 
