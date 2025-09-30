@@ -18,7 +18,7 @@ public class GpuXpbdSolver : MonoBehaviour
     [SerializeField] private float particleRadiusSim = 0.025f;
 
     [Header("Collision Filter")]
-    [SerializeField] private float maxSeparationSpeed = 3.0f;
+    [SerializeField] private float maxSeparationSpeed = 1.5f;
     [SerializeField] private LayerMask overlapLayerMask = ~0;
     [SerializeField] private QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Ignore;
     #endregion

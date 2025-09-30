@@ -280,9 +280,18 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
         CollisionConstraint cc = collisionConstraints[readIndex];
 
         float C = dot(p.positionX - cc.target, cc.normal) - cc.radius;
+        
         if (C < 0.0f)
         {
-            p.positionX -= cc.normal * C;
+            //Bias to clamp maximum velocity
+            float d0 = -C;
+            float bias = (vMax > 0.0f) ? max(d0 - vMax * dts, 0.0f) : 0.0f; 
+            float phi = C + bias;
+
+            if (phi < 0.0f)
+            {
+                p.positionX -= cc.normal * phi;
+            }
         }
     }
 
