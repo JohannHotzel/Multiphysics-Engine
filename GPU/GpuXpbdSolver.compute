@@ -65,6 +65,7 @@ int sphereCount;
 float dt, dts, dts2;
 float3 gravity;
 float omega;
+float vMax;
 
 #define ATOMIC_ADD_FLOAT_UAV(UAV, IDX, VAL)            \
 {                                                      \

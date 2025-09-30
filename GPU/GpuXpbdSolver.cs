@@ -18,6 +18,7 @@ public class GpuXpbdSolver : MonoBehaviour
     [SerializeField] private float particleRadiusSim = 0.025f;
 
     [Header("Collision Filter")]
+    [SerializeField] private float maxSeparationSpeed = 3.0f;
     [SerializeField] private LayerMask overlapLayerMask = ~0;
     [SerializeField] private QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Ignore;
     #endregion
@@ -59,6 +60,7 @@ public class GpuXpbdSolver : MonoBehaviour
         public static readonly int DeltaY = Shader.PropertyToID("deltaY");
         public static readonly int DeltaZ = Shader.PropertyToID("deltaZ");
         public static readonly int CountBuf = Shader.PropertyToID("countBuf");
+        public static readonly int VMax = Shader.PropertyToID("vMax");
         public static readonly int CollisionConstraints = Shader.PropertyToID("collisionConstraints");
         public static readonly int CollisionCounts = Shader.PropertyToID("collisionCounts");
         public static readonly int Spheres = Shader.PropertyToID("spheres");
@@ -129,6 +131,7 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.SetFloat(Sid.Dts2, dts2);
         compute.SetVector(Sid.Gravity, gravity);
         compute.SetFloat(Sid.Omega, sorOmega);
+        compute.SetFloat(Sid.VMax, maxSeparationSpeed);
 
         int groupsP = Mathf.CeilToInt(Mathf.Max(1, particleCount) / (float)THREADS);
         int groupsC = Mathf.CeilToInt(Mathf.Max(1, constraintCount) / (float)THREADS);
@@ -138,7 +141,6 @@ public class GpuXpbdSolver : MonoBehaviour
         GetBoundOverlaps();
         UpdateCollisionBuffers();
 
-        compute.Dispatch(Kid.ResetCollisionCounts, groupsP, 1, 1);
 
         for (int s = 0; s < substeps; s++)
         {
@@ -150,6 +152,7 @@ public class GpuXpbdSolver : MonoBehaviour
                 compute.Dispatch(Kid.ApplyDeltas, groupsP, 1, 1);
             }
 
+            compute.Dispatch(Kid.ResetCollisionCounts, groupsP, 1, 1);
             if (SphereBuffer != null)
                 compute.Dispatch(Kid.BuildCollisionConstraints, groupsP, 1, 1);
 
