@@ -211,6 +211,27 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID)
 
 
 // ------------------ BuildCollisionConstraints (per particle) ------------------
+inline bool CollideSphere(float3 x, float pr, SphereCollider sc, out float3 target, out float3 n)
+{
+    float3 d = x - sc.center;
+    float dist = length(d);
+    
+    const float EPS = 1e-6f;
+
+    float rCombined = sc.radius + pr;
+
+    float pen = rCombined - dist;
+    if (pen <= 0.0f)
+        return false;
+
+    n = (dist > EPS) ? (d / dist) : float3(0, 1, 0);
+
+
+    target = sc.center + n * sc.radius;
+
+    return true;
+}
+
 [numthreads(THREADS, 1, 1)]
 void BuildCollisionConstraints(uint3 id : SV_DispatchThreadID)
 {
@@ -222,35 +243,28 @@ void BuildCollisionConstraints(uint3 id : SV_DispatchThreadID)
         return;
 
     Particle p = particles[i];
+  
     if (p.w == 0.0f)
         return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
 
     [loop]
     for (int s = 0; s < sphereCount; s++)
     {
-        SphereCollider sc = spheres[s];
-
-        float3 x = p.positionX;
-        float3 d = x - sc.center;
-        float dist = length(d);
-        float r = sc.radius + p.radius;
-        float pen = r - dist;
-
-        if (pen > 0.0f)
+        float3 target, n;
+        if (CollideSphere(x, pr, spheres[s], target, n))
         {
             uint idx;
             InterlockedAdd(collisionCounts[i], 1, idx);
             if (idx < MAX_COLLISIONS)
             {
-                float3 n = (dist > 1e-6f) ? (d / dist) : float3(0, 1, 0);
-
                 uint writeIndex = i * MAX_COLLISIONS + idx;
-
                 CollisionConstraint cc;
-                cc.target = sc.center + n * sc.radius;
-                cc.normal = n;
-                cc.radius = p.radius;
-
+                cc.target = target; 
+                cc.normal = n; 
+                cc.radius = pr;
                 collisionConstraints[writeIndex] = cc;
             }
         }
@@ -308,6 +322,7 @@ void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
     
     collisionCounts[i] = 0;
 }
+
 
 
 
