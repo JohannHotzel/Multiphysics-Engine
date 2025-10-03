@@ -5,7 +5,8 @@
 #pragma kernel UpdateVelocities
 
 //Collsion
-#pragma kernel BuildCollisionConstraints
+#pragma kernel BuildSphereConstraints
+#pragma kernel BuildCapsuleConstraints
 #pragma kernel SolveCollisionConstraints
 #pragma kernel ResetCollisionCounts
 
@@ -39,6 +40,13 @@ struct SphereCollider
     float radius;
 };
 
+struct CapsuleCollider
+{
+    float3 p0;
+    float3 p1;
+    float r;
+};
+
 struct CollisionConstraint
 {
     float3 target; 
@@ -48,8 +56,16 @@ struct CollisionConstraint
 
 
 RWStructuredBuffer<Particle> particles;
+int particleCount;
+
 StructuredBuffer<DistanceConstraint> constraints;
+int constraintCount;
+
 StructuredBuffer<SphereCollider> spheres;
+int sphereCount;
+
+StructuredBuffer<CapsuleCollider> capsules;
+int capsuleCount;
 
 RWStructuredBuffer<uint> deltaX;
 RWStructuredBuffer<uint> deltaY;
@@ -59,9 +75,7 @@ RWStructuredBuffer<uint> countBuf;
 RWStructuredBuffer<CollisionConstraint> collisionConstraints;
 RWStructuredBuffer<uint> collisionCounts; 
 
-int particleCount;
-int constraintCount;
-int sphereCount;
+
 float dt, dts, dts2;
 float3 gravity;
 float omega;
@@ -232,23 +246,49 @@ inline bool CollideSphere(float3 x, float pr, SphereCollider sc, out float3 targ
     return true;
 }
 
+
+inline float3 ClosestPointOnSegment(float3 a, float3 b, float3 p)
+{
+    float3 ab = b - a;
+    float t = dot(p - a, ab) / max(dot(ab, ab), 1e-8);
+    t = clamp(t, 0.0, 1.0);
+    return a + t * ab;
+}
+inline bool CollideCapsule(float3 x, float pr, CapsuleCollider c, out float3 target, out float3 n)
+{
+    float3 q = ClosestPointOnSegment(c.p0, c.p1, x);
+    float3 d = x - q;
+    float dist = length(d);
+
+    const float EPS = 1e-6f;
+    float rCombined = c.r + pr;
+    float pen = rCombined - dist;
+    if (pen <= 0.0f)
+        return false;
+
+    n = (dist > EPS) ? (d / dist) : float3(0, 1, 0);
+
+    target = q + n * c.r;
+    return true;
+}
+
 [numthreads(THREADS, 1, 1)]
-void BuildCollisionConstraints(uint3 id : SV_DispatchThreadID)
+void BuildSphereConstraints(uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
     if (i >= particleCount)
         return;
-    
-    if (sphereCount == 0)
-        return;
 
     Particle p = particles[i];
-  
     if (p.w == 0.0f)
         return;
 
     float3 x = p.positionX;
     float pr = p.radius;
+
+    [branch]
+    if (sphereCount == 0)
+        return;
 
     [loop]
     for (int s = 0; s < sphereCount; s++)
@@ -262,14 +302,55 @@ void BuildCollisionConstraints(uint3 id : SV_DispatchThreadID)
             {
                 uint writeIndex = i * MAX_COLLISIONS + idx;
                 CollisionConstraint cc;
-                cc.target = target; 
-                cc.normal = n; 
+                cc.target = target;
+                cc.normal = n;
                 cc.radius = pr;
                 collisionConstraints[writeIndex] = cc;
             }
         }
     }
 }
+
+[numthreads(THREADS, 1, 1)]
+void BuildCapsuleConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
+
+    [branch]
+    if (capsuleCount == 0)
+        return;
+
+    [loop]
+    for (int c = 0; c < capsuleCount; c++)
+    {
+        float3 target, n;
+        if (CollideCapsule(x, pr, capsules[c], target, n))
+        {
+            uint idx;
+            InterlockedAdd(collisionCounts[i], 1, idx);
+            if (idx < MAX_COLLISIONS)
+            {
+                uint writeIndex = i * MAX_COLLISIONS + idx;
+                CollisionConstraint cc;
+                cc.target = target;
+                cc.normal = n;
+                cc.radius = pr;
+                collisionConstraints[writeIndex] = cc;
+            }
+        }
+    }
+}
+
+
 
 // ------------------ SolveCollisionConstraints (per particle) ------------------
 [numthreads(THREADS, 1, 1)]

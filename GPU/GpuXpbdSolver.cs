@@ -30,7 +30,7 @@ public class GpuXpbdSolver : MonoBehaviour
     public ComputeBuffer ParticleBuffer;
     public ComputeBuffer ConstraintBuffer;
     public ComputeBuffer DeltaXBuffer, DeltaYBuffer, DeltaZBuffer, CountBuffer;
-    public ComputeBuffer SphereBuffer;
+    public ComputeBuffer SphereBuffer, CapsuleBuffer;
     public ComputeBuffer CollisionConstraintBuffer;
     public ComputeBuffer CollisionCountBuffer;
     #endregion
@@ -46,7 +46,8 @@ public class GpuXpbdSolver : MonoBehaviour
         public static int SolveDistanceJacobi;
         public static int ApplyDeltas;
         public static int UpdateVelocities;
-        public static int BuildCollisionConstraints;
+        public static int BuildSphereConstraints;
+        public static int BuildCapsuleConstraints;
         public static int SolveCollisionConstraints;
         public static int ResetCollisionCounts;
     }
@@ -55,24 +56,31 @@ public class GpuXpbdSolver : MonoBehaviour
     private static class Sid
     {
         public static readonly int Particles = Shader.PropertyToID("particles");
+        public static readonly int ParticleCount = Shader.PropertyToID("particleCount");
+
         public static readonly int Constraints = Shader.PropertyToID("constraints");
+        public static readonly int ConstraintCount = Shader.PropertyToID("constraintCount");
         public static readonly int DeltaX = Shader.PropertyToID("deltaX");
         public static readonly int DeltaY = Shader.PropertyToID("deltaY");
         public static readonly int DeltaZ = Shader.PropertyToID("deltaZ");
         public static readonly int CountBuf = Shader.PropertyToID("countBuf");
+
+        //Colliders
         public static readonly int VMax = Shader.PropertyToID("vMax");
         public static readonly int CollisionConstraints = Shader.PropertyToID("collisionConstraints");
         public static readonly int CollisionCounts = Shader.PropertyToID("collisionCounts");
+        
         public static readonly int Spheres = Shader.PropertyToID("spheres");
+        public static readonly int SphereCount = Shader.PropertyToID("sphereCount");
+        public static readonly int Capsules = Shader.PropertyToID("capsules");
+        public static readonly int CapsuleCount = Shader.PropertyToID("capsuleCount");
 
-        public static readonly int ParticleCount = Shader.PropertyToID("particleCount");
-        public static readonly int ConstraintCount = Shader.PropertyToID("constraintCount");
+
         public static readonly int Omega = Shader.PropertyToID("omega");
         public static readonly int Dt = Shader.PropertyToID("dt");
         public static readonly int Dts = Shader.PropertyToID("dts");
         public static readonly int Dts2 = Shader.PropertyToID("dts2");
         public static readonly int Gravity = Shader.PropertyToID("gravity");
-        public static readonly int SphereCount = Shader.PropertyToID("sphereCount");
     }
     #endregion
 
@@ -88,8 +96,9 @@ public class GpuXpbdSolver : MonoBehaviour
     private GpuParticle[] _particleSubsetScratch;
 
     // Collision detection scratch
-    private readonly HashSet<Collider> _overlapSet = new();                 // dedup across all cloths
+    private readonly HashSet<Collider> _overlapSet = new();                 
     private readonly List<GpuSphereCollider> _sphereCollidersScratch = new();
+    private readonly List<GpuCapsuleCollider> _capsuleCollidersScratch = new(); 
     #endregion
 
 
@@ -109,7 +118,8 @@ public class GpuXpbdSolver : MonoBehaviour
         Kid.SolveDistanceJacobi = compute.FindKernel("SolveDistanceJacobi");
         Kid.ApplyDeltas = compute.FindKernel("ApplyDeltas");
         Kid.UpdateVelocities = compute.FindKernel("UpdateVelocities");
-        Kid.BuildCollisionConstraints = compute.FindKernel("BuildCollisionConstraints");
+        Kid.BuildSphereConstraints = compute.FindKernel("BuildSphereConstraints");
+        Kid.BuildCapsuleConstraints = compute.FindKernel("BuildCapsuleConstraints");
         Kid.SolveCollisionConstraints = compute.FindKernel("SolveCollisionConstraints");
         Kid.ResetCollisionCounts = compute.FindKernel("ResetCollisionCounts");
 
@@ -153,8 +163,9 @@ public class GpuXpbdSolver : MonoBehaviour
             }
 
             compute.Dispatch(Kid.ResetCollisionCounts, groupsP, 1, 1);
-            if (SphereBuffer != null)
-                compute.Dispatch(Kid.BuildCollisionConstraints, groupsP, 1, 1);
+
+            if (SphereBuffer != null) compute.Dispatch(Kid.BuildSphereConstraints, groupsP, 1, 1);
+            if (CapsuleBuffer != null) compute.Dispatch(Kid.BuildCapsuleConstraints, groupsP, 1, 1);
 
             compute.Dispatch(Kid.SolveCollisionConstraints, groupsP, 1, 1);
             compute.Dispatch(Kid.UpdateVelocities, groupsP, 1, 1);
@@ -235,7 +246,7 @@ public class GpuXpbdSolver : MonoBehaviour
         ZeroAccumulators();
 
         // Bind common buffers to kernels
-        foreach (int k in new[]{ Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities, Kid.BuildCollisionConstraints, Kid.SolveCollisionConstraints })
+        foreach (int k in new[]{ Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.SolveCollisionConstraints })
         {
             compute.SetBuffer(k, Sid.Particles, ParticleBuffer);
         }
@@ -261,8 +272,12 @@ public class GpuXpbdSolver : MonoBehaviour
         CollisionCountBuffer = new ComputeBuffer(particleCount, sizeof(uint), ComputeBufferType.Structured);
         CollisionCountBuffer.SetData(new uint[particleCount]);
 
-        compute.SetBuffer(Kid.BuildCollisionConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
-        compute.SetBuffer(Kid.BuildCollisionConstraints, Sid.CollisionCounts, CollisionCountBuffer);
+        compute.SetBuffer(Kid.BuildSphereConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
+        compute.SetBuffer(Kid.BuildSphereConstraints, Sid.CollisionCounts, CollisionCountBuffer);
+
+        compute.SetBuffer(Kid.BuildCapsuleConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
+        compute.SetBuffer(Kid.BuildCapsuleConstraints, Sid.CollisionCounts, CollisionCountBuffer);
+
 
         compute.SetBuffer(Kid.SolveCollisionConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
         compute.SetBuffer(Kid.SolveCollisionConstraints, Sid.CollisionCounts, CollisionCountBuffer);
@@ -291,6 +306,7 @@ public class GpuXpbdSolver : MonoBehaviour
         SafeRelease(ref DeltaZBuffer);
         SafeRelease(ref CountBuffer);
         SafeRelease(ref SphereBuffer);
+        SafeRelease(ref CapsuleBuffer);
         SafeRelease(ref CollisionConstraintBuffer);
         SafeRelease(ref CollisionCountBuffer);
     }
@@ -349,35 +365,77 @@ public class GpuXpbdSolver : MonoBehaviour
     private void UpdateCollisionBuffers()
     {
         _sphereCollidersScratch.Clear();
+        _capsuleCollidersScratch.Clear();
 
         foreach (Collider col in _overlapSet)
         {
-            if (col is not SphereCollider sc) continue;
-
-            Transform t = sc.transform;
-            Vector3 center = t.TransformPoint(sc.center);
-            Vector3 s = t.lossyScale;
-            float radius = sc.radius * Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z));
-
-            _sphereCollidersScratch.Add(new GpuSphereCollider(center, radius));
+            if (col is SphereCollider sc)
+            {
+                Transform t = sc.transform;
+                Vector3 center = t.TransformPoint(sc.center);
+                Vector3 s = t.lossyScale;
+                float radius = sc.radius * Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z));
+                _sphereCollidersScratch.Add(new GpuSphereCollider(center, radius));
+            }
+            else if (col is CapsuleCollider cc)
+            {
+                ExtractCapsule(cc, out var p0, out var p1, out float r);
+                _capsuleCollidersScratch.Add(new GpuCapsuleCollider(p0, p1, r));
+            }
         }
 
+        // --- Spheres ---
         int sphereCount = _sphereCollidersScratch.Count;
         compute.SetInt(Sid.SphereCount, sphereCount);
 
-        if (sphereCount == 0)
+        if (sphereCount == 0) SafeRelease(ref SphereBuffer);
+        else
         {
             SafeRelease(ref SphereBuffer);
-            return;
+            SphereBuffer = new ComputeBuffer(sphereCount, GpuSphereCollider.Stride, ComputeBufferType.Structured);
+            SphereBuffer.SetData(_sphereCollidersScratch);
+            compute.SetBuffer(Kid.BuildSphereConstraints, Sid.Spheres, SphereBuffer);
         }
 
-        SafeRelease(ref SphereBuffer);
-        int stride = GpuSphereCollider.Stride;
-        SphereBuffer = new ComputeBuffer(sphereCount, stride, ComputeBufferType.Structured);
-        SphereBuffer.SetData(_sphereCollidersScratch);
+        // --- Capsules ---
+        int capsuleCount = _capsuleCollidersScratch.Count;
+        compute.SetInt(Sid.CapsuleCount, capsuleCount);
 
-        compute.SetBuffer(Kid.BuildCollisionConstraints, Sid.Spheres, SphereBuffer);
+        if (capsuleCount == 0) SafeRelease(ref CapsuleBuffer);
+        else
+        {
+            SafeRelease(ref CapsuleBuffer);
+            CapsuleBuffer = new ComputeBuffer(capsuleCount, GpuCapsuleCollider.Stride, ComputeBufferType.Structured);
+            CapsuleBuffer.SetData(_capsuleCollidersScratch);
+            compute.SetBuffer(Kid.BuildCapsuleConstraints, Sid.Capsules, CapsuleBuffer);
+        }
     }
+
+
+    private static void ExtractCapsule(CapsuleCollider cc, out Vector3 p0, out Vector3 p1, out float rWorld)
+    {
+        var t = cc.transform;
+
+        Vector3 axisLocal = cc.direction switch
+        {
+            0 => Vector3.right,
+            1 => Vector3.up,
+            _ => Vector3.forward
+        };
+
+        float halfCyl = Mathf.Max(0f, cc.height * 0.5f - cc.radius);
+        Vector3 centerLocal = cc.center;
+
+        Vector3 p0Local = centerLocal - axisLocal * halfCyl;
+        Vector3 p1Local = centerLocal + axisLocal * halfCyl;
+
+        p0 = t.TransformPoint(p0Local);
+        p1 = t.TransformPoint(p1Local);
+
+        Vector3 s = t.lossyScale;
+        rWorld = cc.radius * Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z));
+    }
+
 
     private void ZeroAccumulators()
     {
