@@ -51,10 +51,33 @@ public struct GpuBoxCollider
     }
 }
 
-public struct GpuMeshCollider
+public struct GpuTriangle
 {
+    public Vector3 a, b, c;
+    public const int Stride = sizeof(float) * 9; // 3 * float3
 
+    public GpuTriangle(Vector3 a, Vector3 b, Vector3 c)
+    {
+        this.a = a; this.b = b; this.c = c;
+    }
 }
+
+public struct GpuMeshRange
+{
+    public uint start;
+    public uint count;
+    public const int Stride = sizeof(uint) * 2;
+
+    public GpuMeshRange(uint s, uint c)
+    {
+        start = s; count = c;
+    }
+}
+
+
+
+
+
 
 //Axis-Aligned Bounding Box Check
 public struct Aabb

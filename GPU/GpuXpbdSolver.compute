@@ -10,6 +10,7 @@
 #pragma kernel BuildSphereConstraints
 #pragma kernel BuildCapsuleConstraints
 #pragma kernel BuildBoxConstraints
+#pragma kernel BuildMeshConstraints
 
 #pragma kernel SolveCollisionConstraints
 #pragma kernel ResetCollisionCounts
@@ -60,6 +61,19 @@ struct BoxCollider
     float3 halfExtents;
 };
 
+struct Triangle
+{
+    float3 a;
+    float3 b;
+    float3 c;
+};
+
+struct MeshRange
+{
+    uint start;
+    uint count;
+};
+
 struct CollisionConstraint
 {
     float3 target; 
@@ -97,6 +111,10 @@ int capsuleCount;
 
 StructuredBuffer<BoxCollider> boxes;
 int boxCount;
+
+StructuredBuffer<Triangle> meshTriangles;
+StructuredBuffer<MeshRange> meshRanges;
+int meshCount;
 
 RWStructuredBuffer<uint> deltaX;
 RWStructuredBuffer<uint> deltaY;
@@ -514,6 +532,128 @@ void BuildBoxConstraints(uint3 id : SV_DispatchThreadID)
                 cc.normal = n;
                 cc.radius = pr;
                 collisionConstraints[writeIndex] = cc;
+            }
+        }
+    }
+}
+
+
+// Mesh Collision (still primitive solution because only overlapping triangles are count as collisions)
+inline float3 ClosestPointOnTriangle(float3 p, float3 a, float3 b, float3 c)
+{
+    float3 ab = b - a;
+    float3 ac = c - a;
+    float3 ap = p - a;
+
+    float d1 = dot(ab, ap);
+    float d2 = dot(ac, ap);
+    if (d1 <= 0 && d2 <= 0)
+        return a;
+
+    float3 bp = p - b;
+    float d3 = dot(ab, bp);
+    float d4 = dot(ac, bp);
+    if (d3 >= 0 && d4 <= d3)
+        return b;
+
+    float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0)
+    {
+        float v = d1 / (d1 - d3);
+        return a + v * ab;
+    }
+
+    float3 cp = p - c;
+    float d5 = dot(ab, cp);
+    float d6 = dot(ac, cp);
+    if (d6 >= 0 && d5 <= d6)
+        return c;
+
+    float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0)
+    {
+        float w = d2 / (d2 - d6);
+        return a + w * ac;
+    }
+
+    float va = d3 * d6 - d5 * d4;
+    if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0)
+    {
+        float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return b + w * (c - b);
+    }
+
+    // Inside face region
+    float3 n = normalize(cross(ab, ac));
+    float dist = dot(p - a, n);
+    return p - dist * n;
+}
+
+inline bool CollideTriangle(float3 x, float pr, Triangle tri, out float3 target, out float3 n)
+{
+    float3 cp = ClosestPointOnTriangle(x, tri.a, tri.b, tri.c);
+    float3 d = x - cp;
+    float dist = length(d);
+
+    if (dist <= pr + 1e-6f)
+    {
+        float3 ab = tri.b - tri.a;
+        float3 ac = tri.c - tri.a;
+        float3 nn = cross(ab, ac);
+        float len = length(nn);
+        n = (len > 1e-6f) ? (nn / len) : float3(0, 1, 0);
+        target = cp;
+        return true;
+    }
+
+    target = cp;
+    n = float3(0, 1, 0);
+    return false;
+}
+
+[numthreads(THREADS, 1, 1)]
+void BuildMeshConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    if (meshCount == 0)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
+
+    [loop]
+    for (int m = 0; m < meshCount; m++)
+    {
+        MeshRange r = meshRanges[m];
+        uint start = r.start;
+        uint count = r.count;
+
+        [loop]
+        for (uint t = 0; t < count; t++)
+        {
+            Triangle tri = meshTriangles[start + t];
+
+            float3 target, n;
+            if (CollideTriangle(x, pr, tri, target, n))
+            {
+                uint idx;
+                InterlockedAdd(collisionCounts[i], 1, idx);
+                if (idx < MAX_COLLISIONS)
+                {
+                    uint writeIndex = i * MAX_COLLISIONS + idx;
+                    CollisionConstraint cc;
+                    cc.target = target;
+                    cc.normal = n;
+                    cc.radius = pr;
+                    collisionConstraints[writeIndex] = cc;
+                }
             }
         }
     }

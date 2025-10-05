@@ -35,6 +35,7 @@ public class GpuXpbdSolver : MonoBehaviour
     public ComputeBuffer ConstraintBuffer;
     public ComputeBuffer DeltaXBuffer, DeltaYBuffer, DeltaZBuffer, CountBuffer;
     public ComputeBuffer SphereBuffer, CapsuleBuffer, BoxBuffer;
+    public ComputeBuffer MeshTriangleBuffer, MeshRangeBuffer;
     public ComputeBuffer CollisionConstraintBuffer, CollisionCountBuffer;
     public ComputeBuffer ClothRangesBuffer, ClothAabbsBuffer;
 
@@ -55,6 +56,7 @@ public class GpuXpbdSolver : MonoBehaviour
         public static int BuildSphereConstraints;
         public static int BuildCapsuleConstraints;
         public static int BuildBoxConstraints;
+        public static int BuildMeshConstraints;
 
         public static int SolveCollisionConstraints;
         public static int ResetCollisionCounts;
@@ -88,6 +90,10 @@ public class GpuXpbdSolver : MonoBehaviour
         public static readonly int CapsuleCount = Shader.PropertyToID("capsuleCount");
         public static readonly int Boxes = Shader.PropertyToID("boxes");    
         public static readonly int BoxCount = Shader.PropertyToID("boxCount");
+        public static readonly int MeshTriangles = Shader.PropertyToID("meshTriangles"); 
+        public static readonly int MeshRanges = Shader.PropertyToID("meshRanges");   
+        public static readonly int MeshCount = Shader.PropertyToID("meshCount");      
+        public static readonly int TriangleCount = Shader.PropertyToID("triangleCount");
 
         public static readonly int Omega = Shader.PropertyToID("omega");
         public static readonly int Dt = Shader.PropertyToID("dt");
@@ -105,9 +111,6 @@ public class GpuXpbdSolver : MonoBehaviour
     private readonly List<GpuParticle> allParticlesList = new();
     private readonly List<GpuDistanceConstraint> allConstraintsList = new();
 
-    // Scratch for bounds building (CPU readback subset)
-    private GpuParticle[] _particleSubsetScratch;
-
     // Collision detection scratch
     private Aabb[] _aabbCpu;
 
@@ -115,6 +118,8 @@ public class GpuXpbdSolver : MonoBehaviour
     private readonly List<GpuSphereCollider> _sphereCollidersScratch = new();
     private readonly List<GpuCapsuleCollider> _capsuleCollidersScratch = new();
     private readonly List<GpuBoxCollider> _boxCollidersScratch = new();
+    private readonly List<GpuTriangle> _meshTrianglesScratch = new();
+    private readonly List<GpuMeshRange> _meshRangesScratch = new();
     #endregion
 
 
@@ -135,9 +140,12 @@ public class GpuXpbdSolver : MonoBehaviour
         Kid.ApplyDeltas = compute.FindKernel("ApplyDeltas");
         Kid.UpdateVelocities = compute.FindKernel("UpdateVelocities");
 
+
         Kid.BuildSphereConstraints = compute.FindKernel("BuildSphereConstraints");
         Kid.BuildCapsuleConstraints = compute.FindKernel("BuildCapsuleConstraints");
         Kid.BuildBoxConstraints = compute.FindKernel("BuildBoxConstraints");
+        Kid.BuildMeshConstraints = compute.FindKernel("BuildMeshConstraints");
+
         Kid.SolveCollisionConstraints = compute.FindKernel("SolveCollisionConstraints");
         Kid.ResetCollisionCounts = compute.FindKernel("ResetCollisionCounts");
         Kid.BuildClothAabbs = compute.FindKernel("BuildClothAabbs");
@@ -187,6 +195,7 @@ public class GpuXpbdSolver : MonoBehaviour
             if (SphereBuffer != null) compute.Dispatch(Kid.BuildSphereConstraints, groupsP, 1, 1);
             if (CapsuleBuffer != null) compute.Dispatch(Kid.BuildCapsuleConstraints, groupsP, 1, 1);
             if (BoxBuffer != null) compute.Dispatch(Kid.BuildBoxConstraints, groupsP, 1, 1);
+            if (MeshTriangleBuffer != null) compute.Dispatch(Kid.BuildMeshConstraints, groupsP, 1, 1);
 
             compute.Dispatch(Kid.SolveCollisionConstraints, groupsP, 1, 1);
             compute.Dispatch(Kid.UpdateVelocities, groupsP, 1, 1);
@@ -267,7 +276,7 @@ public class GpuXpbdSolver : MonoBehaviour
         ZeroAccumulators();
 
         // Bind common buffers to kernels
-        foreach (int k in new[]{ Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.SolveCollisionConstraints })
+        foreach (int k in new[]{ Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints, Kid.SolveCollisionConstraints })
         {
             compute.SetBuffer(k, Sid.Particles, ParticleBuffer);
         }
@@ -302,6 +311,9 @@ public class GpuXpbdSolver : MonoBehaviour
 
         compute.SetBuffer(Kid.BuildBoxConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
         compute.SetBuffer(Kid.BuildBoxConstraints, Sid.CollisionCounts, CollisionCountBuffer);
+
+        compute.SetBuffer(Kid.BuildMeshConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
+        compute.SetBuffer(Kid.BuildMeshConstraints, Sid.CollisionCounts, CollisionCountBuffer);
 
 
         compute.SetBuffer(Kid.SolveCollisionConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
@@ -361,6 +373,8 @@ public class GpuXpbdSolver : MonoBehaviour
         SafeRelease(ref SphereBuffer);
         SafeRelease(ref CapsuleBuffer);
         SafeRelease(ref BoxBuffer);
+        SafeRelease(ref MeshTriangleBuffer);
+        SafeRelease(ref MeshRangeBuffer);
         SafeRelease(ref CollisionConstraintBuffer);
         SafeRelease(ref CollisionCountBuffer);
         SafeRelease(ref ClothRangesBuffer);
@@ -409,6 +423,8 @@ public class GpuXpbdSolver : MonoBehaviour
         _sphereCollidersScratch.Clear();
         _capsuleCollidersScratch.Clear();
         _boxCollidersScratch.Clear();
+        _meshTrianglesScratch.Clear();
+        _meshRangesScratch.Clear();
 
         foreach (Collider col in _overlapSet)
         {
@@ -429,6 +445,10 @@ public class GpuXpbdSolver : MonoBehaviour
             {
                 ExtractBox(bc, out var center, out var right, out var up, out var fwd, out var halfExtents);
                 _boxCollidersScratch.Add(new GpuBoxCollider(center, right, up, fwd, halfExtents));
+            }
+            else if (col is MeshCollider mc && mc.sharedMesh != null)
+            {
+                ExtractMeshTriangles(mc, _meshTrianglesScratch, _meshRangesScratch); // NEU
             }
         }
 
@@ -463,6 +483,24 @@ public class GpuXpbdSolver : MonoBehaviour
             EnsureBuffer(ref BoxBuffer, boxCount, GpuBoxCollider.Stride);
             BoxBuffer.SetData(_boxCollidersScratch.ToArray(), 0, 0, boxCount);
             compute.SetBuffer(Kid.BuildBoxConstraints, Sid.Boxes, BoxBuffer);
+        }
+
+        // --- MeshTriangles ---
+        int triCount = _meshTrianglesScratch.Count;
+        int meshCount = _meshRangesScratch.Count;
+
+        compute.SetInt(Sid.MeshCount, meshCount);
+
+        if (triCount > 0 && meshCount > 0)
+        {
+            EnsureBuffer(ref MeshTriangleBuffer, triCount, GpuTriangle.Stride);
+            EnsureBuffer(ref MeshRangeBuffer, meshCount, GpuMeshRange.Stride);
+
+            MeshTriangleBuffer.SetData(_meshTrianglesScratch);
+            MeshRangeBuffer.SetData(_meshRangesScratch);
+
+            compute.SetBuffer(Kid.BuildMeshConstraints, Sid.MeshTriangles, MeshTriangleBuffer);
+            compute.SetBuffer(Kid.BuildMeshConstraints, Sid.MeshRanges, MeshRangeBuffer);
         }
     }
     static void EnsureBuffer(ref ComputeBuffer buf, int neededCount, int stride, ComputeBufferType type = ComputeBufferType.Structured, float growFactor = 1.5f)
@@ -523,6 +561,33 @@ public class GpuXpbdSolver : MonoBehaviour
         halfExtents = new Vector3(ex, ey, ez);
 
         center = t.TransformPoint(bc.center);
+    }
+    private static void ExtractMeshTriangles(MeshCollider mc, List<GpuTriangle> outTris, List<GpuMeshRange> outRanges)
+    {
+        var mesh = mc.sharedMesh;
+        var t = mc.transform;
+
+        var verts = mesh.vertices;
+        var indices = mesh.triangles;
+        if (indices == null || indices.Length < 3) return;
+
+        uint start = (uint)outTris.Count;
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            int i0 = indices[i];
+            int i1 = indices[i + 1];
+            int i2 = indices[i + 2];
+
+            Vector3 a = t.TransformPoint(verts[i0]);
+            Vector3 b = t.TransformPoint(verts[i1]);
+            Vector3 c = t.TransformPoint(verts[i2]);
+
+            outTris.Add(new GpuTriangle(a, b, c));
+        }
+
+        uint count = (uint)(outTris.Count) - start;
+        if (count > 0)
+            outRanges.Add(new GpuMeshRange(start, count));
     }
 
 
