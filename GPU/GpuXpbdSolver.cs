@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -31,8 +31,9 @@ public class GpuXpbdSolver : MonoBehaviour
     public ComputeBuffer ConstraintBuffer;
     public ComputeBuffer DeltaXBuffer, DeltaYBuffer, DeltaZBuffer, CountBuffer;
     public ComputeBuffer SphereBuffer, CapsuleBuffer;
-    public ComputeBuffer CollisionConstraintBuffer;
-    public ComputeBuffer CollisionCountBuffer;
+    public ComputeBuffer CollisionConstraintBuffer, CollisionCountBuffer;
+    public ComputeBuffer ClothRangesBuffer, ClothAabbsBuffer;
+
     #endregion
 
     #region === Constants / IDs ===
@@ -50,6 +51,7 @@ public class GpuXpbdSolver : MonoBehaviour
         public static int BuildCapsuleConstraints;
         public static int SolveCollisionConstraints;
         public static int ResetCollisionCounts;
+        public static int BuildClothAabbs;
     }
 
     // Shader property IDs
@@ -66,6 +68,9 @@ public class GpuXpbdSolver : MonoBehaviour
         public static readonly int CountBuf = Shader.PropertyToID("countBuf");
 
         //Colliders
+        public static readonly int ClothRanges = Shader.PropertyToID("clothRanges");
+        public static readonly int ClothAabbs = Shader.PropertyToID("clothAabbs");
+
         public static readonly int VMax = Shader.PropertyToID("vMax");
         public static readonly int CollisionConstraints = Shader.PropertyToID("collisionConstraints");
         public static readonly int CollisionCounts = Shader.PropertyToID("collisionCounts");
@@ -96,6 +101,8 @@ public class GpuXpbdSolver : MonoBehaviour
     private GpuParticle[] _particleSubsetScratch;
 
     // Collision detection scratch
+    private Aabb[] _aabbCpu;
+
     private readonly HashSet<Collider> _overlapSet = new();                 
     private readonly List<GpuSphereCollider> _sphereCollidersScratch = new();
     private readonly List<GpuCapsuleCollider> _capsuleCollidersScratch = new(); 
@@ -122,6 +129,8 @@ public class GpuXpbdSolver : MonoBehaviour
         Kid.BuildCapsuleConstraints = compute.FindKernel("BuildCapsuleConstraints");
         Kid.SolveCollisionConstraints = compute.FindKernel("SolveCollisionConstraints");
         Kid.ResetCollisionCounts = compute.FindKernel("ResetCollisionCounts");
+        Kid.BuildClothAabbs = compute.FindKernel("BuildClothAabbs");
+
 
         RegisterAllCloths();
         InitializeBuffers();
@@ -147,7 +156,7 @@ public class GpuXpbdSolver : MonoBehaviour
         int groupsC = Mathf.CeilToInt(Mathf.Max(1, constraintCount) / (float)THREADS);
 
         compute.Dispatch(Kid.Predict, groupsP, 1, 1);
-        UpdateClothBounds();
+        UpdateClothBoundsGPUGetData();
         GetBoundOverlaps();
         UpdateCollisionBuffers();
 
@@ -289,6 +298,34 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.SetInt(Sid.ConstraintCount, constraintCount);
         compute.SetFloat(Sid.Omega, sorOmega);
 
+
+        if (cloths.Count > 0)
+        {
+            var ranges = new ClothRange[cloths.Count];
+            for (int c = 0; c < cloths.Count; c++)
+            {
+                ranges[c] = new ClothRange
+                {
+                    start = (uint)cloths[c].startIndex,
+                    count = (uint)cloths[c].count
+                };
+            }
+
+            SafeRelease(ref ClothRangesBuffer);
+            SafeRelease(ref ClothAabbsBuffer);
+
+            ClothRangesBuffer = new ComputeBuffer(cloths.Count, ClothRange.Stride, ComputeBufferType.Structured);
+            ClothRangesBuffer.SetData(ranges);
+
+            ClothAabbsBuffer = new ComputeBuffer(cloths.Count, Aabb.Stride, ComputeBufferType.Structured);
+            _aabbCpu = new Aabb[cloths.Count];
+
+            compute.SetBuffer(Kid.BuildClothAabbs, Sid.Particles, ParticleBuffer);
+            compute.SetBuffer(Kid.BuildClothAabbs, Sid.ClothRanges, ClothRangesBuffer);
+            compute.SetBuffer(Kid.BuildClothAabbs, Sid.ClothAabbs, ClothAabbsBuffer);
+        }
+
+
         Debug.Log($"[GpuXpbdSolver] Registered: {particleCount} particles, {constraintCount} constraints.");
     }
     private static void SafeRelease(ref ComputeBuffer buf)
@@ -309,37 +346,25 @@ public class GpuXpbdSolver : MonoBehaviour
         SafeRelease(ref CapsuleBuffer);
         SafeRelease(ref CollisionConstraintBuffer);
         SafeRelease(ref CollisionCountBuffer);
+        SafeRelease(ref ClothRangesBuffer);
+        SafeRelease(ref ClothAabbsBuffer);
+
     }
     #endregion
 
 
     #region === Simulation Steps ===
-    private void UpdateClothBounds()
+    private void UpdateClothBoundsGPUGetData()
     {
-        if (ParticleBuffer == null || particleCount <= 0) return;
+        if (cloths.Count == 0 || ClothAabbsBuffer == null) return;
 
-        foreach (var cloth in cloths)
+        compute.Dispatch(Kid.BuildClothAabbs, cloths.Count, 1, 1);
+        ClothAabbsBuffer.GetData(_aabbCpu);
+
+        for (int c = 0; c < cloths.Count; c++)
         {
-            int count = cloth.count;
-            if (count <= 0) continue;
-
-            if (_particleSubsetScratch == null || _particleSubsetScratch.Length < count)
-                _particleSubsetScratch = new GpuParticle[Mathf.Max(1, Mathf.NextPowerOfTwo(count))];
-
-            ParticleBuffer.GetData(_particleSubsetScratch, 0, cloth.startIndex, cloth.count);
-
-            Vector3 mn = _particleSubsetScratch[0].positionPredicted;
-            Vector3 mx = mn;
-
-            for (int i = 1; i < cloth.count; i++)
-            {
-                var p = _particleSubsetScratch[i].positionPredicted;
-                mn = Vector3.Min(mn, p);
-                mx = Vector3.Max(mx, p);
-            }
-
-            cloth.aabbMin = mn;
-            cloth.aabbMax = mx;
+            cloths[c].aabbMin = _aabbCpu[c].mn;
+            cloths[c].aabbMax = _aabbCpu[c].mx;
         }
     }
     private void GetBoundOverlaps()

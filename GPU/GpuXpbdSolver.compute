@@ -5,6 +5,7 @@
 #pragma kernel UpdateVelocities
 
 //Collsion
+#pragma kernel BuildClothAabbs
 #pragma kernel BuildSphereConstraints
 #pragma kernel BuildCapsuleConstraints
 #pragma kernel SolveCollisionConstraints
@@ -54,12 +55,27 @@ struct CollisionConstraint
     float radius;   
 };
 
+struct ClothRange
+{
+    uint start;
+    uint count;
+};
+
+struct Aabb
+{
+    float3 mn;
+    float3 mx;
+};
+
 
 RWStructuredBuffer<Particle> particles;
 int particleCount;
 
 StructuredBuffer<DistanceConstraint> constraints;
 int constraintCount;
+
+StructuredBuffer<ClothRange> clothRanges;
+RWStructuredBuffer<Aabb> clothAabbs;
 
 StructuredBuffer<SphereCollider> spheres;
 int sphereCount;
@@ -222,6 +238,41 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID)
 }
 
 
+
+[numthreads(1, 1, 1)]
+void BuildClothAabbs(uint3 id : SV_DispatchThreadID)
+{
+    uint c = id.x;
+
+    ClothRange r = clothRanges[c];
+    uint start = r.start;
+    uint count = r.count;
+
+    if (count == 0)
+    {
+        Aabb a;
+        a.mn = float3(0, 0, 0);
+        a.mx = float3(0, 0, 0);
+        clothAabbs[c] = a;
+        return;
+    }
+
+    float3 mn = float3(+3.4e38f, +3.4e38f, +3.4e38f);
+    float3 mx = float3(-3.4e38f, -3.4e38f, -3.4e38f);
+
+    [loop]
+    for (uint i = 0; i < count; i++)
+    {
+        float3 p = particles[start + i].positionPredicted;
+        mn = min(mn, p);
+        mx = max(mx, p);
+    }
+
+    Aabb outAabb;
+    outAabb.mn = mn;
+    outAabb.mx = mx;
+    clothAabbs[c] = outAabb;
+}
 
 
 // ------------------ BuildCollisionConstraints (per particle) ------------------
@@ -403,9 +454,5 @@ void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
     
     collisionCounts[i] = 0;
 }
-
-
-
-
 
 

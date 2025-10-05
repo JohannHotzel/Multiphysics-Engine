@@ -39,3 +39,28 @@ public struct GpuMeshCollider
 {
 
 }
+
+//Axis-Aligned Bounding Box Check
+public struct Aabb
+{
+    public Vector3 mn;
+    public Vector3 mx;
+    public const int Stride = sizeof(float) * 6; // float3 + float3
+    public Aabb(Vector3 min, Vector3 max)
+    {
+        mn = min;
+        mx = max;
+    }
+}
+//This will be later changed to a aggregat strure used for Softbodies and Cloths
+public struct ClothRange
+{
+    public uint start;
+    public uint count;
+    public const int Stride = sizeof(int) * 2; // int + int
+    public ClothRange(uint s, uint c)
+    {
+        start = s;
+        count = c;
+    }
+}
