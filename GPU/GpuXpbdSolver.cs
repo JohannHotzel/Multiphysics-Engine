@@ -34,7 +34,7 @@ public class GpuXpbdSolver : MonoBehaviour
     public ComputeBuffer ParticleBuffer;
     public ComputeBuffer ConstraintBuffer;
     public ComputeBuffer DeltaXBuffer, DeltaYBuffer, DeltaZBuffer, CountBuffer;
-    public ComputeBuffer SphereBuffer, CapsuleBuffer;
+    public ComputeBuffer SphereBuffer, CapsuleBuffer, BoxBuffer;
     public ComputeBuffer CollisionConstraintBuffer, CollisionCountBuffer;
     public ComputeBuffer ClothRangesBuffer, ClothAabbsBuffer;
 
@@ -51,8 +51,11 @@ public class GpuXpbdSolver : MonoBehaviour
         public static int SolveDistanceJacobi;
         public static int ApplyDeltas;
         public static int UpdateVelocities;
+
         public static int BuildSphereConstraints;
         public static int BuildCapsuleConstraints;
+        public static int BuildBoxConstraints;
+
         public static int SolveCollisionConstraints;
         public static int ResetCollisionCounts;
         public static int BuildClothAabbs;
@@ -83,7 +86,8 @@ public class GpuXpbdSolver : MonoBehaviour
         public static readonly int SphereCount = Shader.PropertyToID("sphereCount");
         public static readonly int Capsules = Shader.PropertyToID("capsules");
         public static readonly int CapsuleCount = Shader.PropertyToID("capsuleCount");
-
+        public static readonly int Boxes = Shader.PropertyToID("boxes");    
+        public static readonly int BoxCount = Shader.PropertyToID("boxCount");
 
         public static readonly int Omega = Shader.PropertyToID("omega");
         public static readonly int Dt = Shader.PropertyToID("dt");
@@ -109,7 +113,8 @@ public class GpuXpbdSolver : MonoBehaviour
 
     private readonly HashSet<Collider> _overlapSet = new();                 
     private readonly List<GpuSphereCollider> _sphereCollidersScratch = new();
-    private readonly List<GpuCapsuleCollider> _capsuleCollidersScratch = new(); 
+    private readonly List<GpuCapsuleCollider> _capsuleCollidersScratch = new();
+    private readonly List<GpuBoxCollider> _boxCollidersScratch = new();
     #endregion
 
 
@@ -129,8 +134,10 @@ public class GpuXpbdSolver : MonoBehaviour
         Kid.SolveDistanceJacobi = compute.FindKernel("SolveDistanceJacobi");
         Kid.ApplyDeltas = compute.FindKernel("ApplyDeltas");
         Kid.UpdateVelocities = compute.FindKernel("UpdateVelocities");
+
         Kid.BuildSphereConstraints = compute.FindKernel("BuildSphereConstraints");
         Kid.BuildCapsuleConstraints = compute.FindKernel("BuildCapsuleConstraints");
+        Kid.BuildBoxConstraints = compute.FindKernel("BuildBoxConstraints");
         Kid.SolveCollisionConstraints = compute.FindKernel("SolveCollisionConstraints");
         Kid.ResetCollisionCounts = compute.FindKernel("ResetCollisionCounts");
         Kid.BuildClothAabbs = compute.FindKernel("BuildClothAabbs");
@@ -179,6 +186,7 @@ public class GpuXpbdSolver : MonoBehaviour
 
             if (SphereBuffer != null) compute.Dispatch(Kid.BuildSphereConstraints, groupsP, 1, 1);
             if (CapsuleBuffer != null) compute.Dispatch(Kid.BuildCapsuleConstraints, groupsP, 1, 1);
+            if (BoxBuffer != null) compute.Dispatch(Kid.BuildBoxConstraints, groupsP, 1, 1);
 
             compute.Dispatch(Kid.SolveCollisionConstraints, groupsP, 1, 1);
             compute.Dispatch(Kid.UpdateVelocities, groupsP, 1, 1);
@@ -259,7 +267,7 @@ public class GpuXpbdSolver : MonoBehaviour
         ZeroAccumulators();
 
         // Bind common buffers to kernels
-        foreach (int k in new[]{ Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.SolveCollisionConstraints })
+        foreach (int k in new[]{ Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.SolveCollisionConstraints })
         {
             compute.SetBuffer(k, Sid.Particles, ParticleBuffer);
         }
@@ -285,11 +293,15 @@ public class GpuXpbdSolver : MonoBehaviour
         CollisionCountBuffer = new ComputeBuffer(particleCount, sizeof(uint), ComputeBufferType.Structured);
         CollisionCountBuffer.SetData(new uint[particleCount]);
 
+
         compute.SetBuffer(Kid.BuildSphereConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
         compute.SetBuffer(Kid.BuildSphereConstraints, Sid.CollisionCounts, CollisionCountBuffer);
 
         compute.SetBuffer(Kid.BuildCapsuleConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
         compute.SetBuffer(Kid.BuildCapsuleConstraints, Sid.CollisionCounts, CollisionCountBuffer);
+
+        compute.SetBuffer(Kid.BuildBoxConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
+        compute.SetBuffer(Kid.BuildBoxConstraints, Sid.CollisionCounts, CollisionCountBuffer);
 
 
         compute.SetBuffer(Kid.SolveCollisionConstraints, Sid.CollisionConstraints, CollisionConstraintBuffer);
@@ -348,6 +360,7 @@ public class GpuXpbdSolver : MonoBehaviour
         SafeRelease(ref CountBuffer);
         SafeRelease(ref SphereBuffer);
         SafeRelease(ref CapsuleBuffer);
+        SafeRelease(ref BoxBuffer);
         SafeRelease(ref CollisionConstraintBuffer);
         SafeRelease(ref CollisionCountBuffer);
         SafeRelease(ref ClothRangesBuffer);
@@ -395,6 +408,7 @@ public class GpuXpbdSolver : MonoBehaviour
     {
         _sphereCollidersScratch.Clear();
         _capsuleCollidersScratch.Clear();
+        _boxCollidersScratch.Clear();
 
         foreach (Collider col in _overlapSet)
         {
@@ -410,6 +424,11 @@ public class GpuXpbdSolver : MonoBehaviour
             {
                 ExtractCapsule(cc, out var p0, out var p1, out float r);
                 _capsuleCollidersScratch.Add(new GpuCapsuleCollider(p0, p1, r));
+            }
+            else if (col is BoxCollider bc)
+            {
+                ExtractBox(bc, out var center, out var right, out var up, out var fwd, out var halfExtents);
+                _boxCollidersScratch.Add(new GpuBoxCollider(center, right, up, fwd, halfExtents));
             }
         }
 
@@ -434,6 +453,17 @@ public class GpuXpbdSolver : MonoBehaviour
             CapsuleBuffer.SetData(_capsuleCollidersScratch.ToArray(), 0, 0, capsuleCount);
             compute.SetBuffer(Kid.BuildCapsuleConstraints, Sid.Capsules, CapsuleBuffer);
         }
+
+        // --- BoxColliders ---
+        int boxCount = _boxCollidersScratch.Count;
+        compute.SetInt(Sid.BoxCount, boxCount);
+
+        if (boxCount > 0)
+        {
+            EnsureBuffer(ref BoxBuffer, boxCount, GpuBoxCollider.Stride);
+            BoxBuffer.SetData(_boxCollidersScratch.ToArray(), 0, 0, boxCount);
+            compute.SetBuffer(Kid.BuildBoxConstraints, Sid.Boxes, BoxBuffer);
+        }
     }
     static void EnsureBuffer(ref ComputeBuffer buf, int neededCount, int stride, ComputeBufferType type = ComputeBufferType.Structured, float growFactor = 1.5f)
     {
@@ -444,7 +474,6 @@ public class GpuXpbdSolver : MonoBehaviour
         if (buf != null) { buf.Dispose(); buf = null; }
         buf = new ComputeBuffer(newCount, stride, type);
     }
-
 
     private static void ExtractCapsule(CapsuleCollider cc, out Vector3 p0, out Vector3 p1, out float rWorld)
     {
@@ -468,6 +497,32 @@ public class GpuXpbdSolver : MonoBehaviour
 
         Vector3 s = t.lossyScale;
         rWorld = cc.radius * Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z));
+    }
+    private static void ExtractBox(BoxCollider bc, out Vector3 center, out Vector3 right, out Vector3 up, out Vector3 fwd, out Vector3 halfExtents)
+    {
+        var t = bc.transform;
+
+        Matrix4x4 localToWorld = t.localToWorldMatrix;
+
+        Vector3 hxLocal = new Vector3(bc.size.x * 0.5f, 0f, 0f);
+        Vector3 hyLocal = new Vector3(0f, bc.size.y * 0.5f, 0f);
+        Vector3 hzLocal = new Vector3(0f, 0f, bc.size.z * 0.5f);
+
+        Vector3 hxWorld = localToWorld.MultiplyVector(hxLocal);
+        Vector3 hyWorld = localToWorld.MultiplyVector(hyLocal);
+        Vector3 hzWorld = localToWorld.MultiplyVector(hzLocal);
+
+        float ex = hxWorld.magnitude;
+        float ey = hyWorld.magnitude;
+        float ez = hzWorld.magnitude;
+
+        right = (ex > 1e-8f) ? (hxWorld / ex) : t.right;
+        up = (ey > 1e-8f) ? (hyWorld / ey) : t.up;
+        fwd = (ez > 1e-8f) ? (hzWorld / ez) : t.forward;
+
+        halfExtents = new Vector3(ex, ey, ez);
+
+        center = t.TransformPoint(bc.center);
     }
 
 

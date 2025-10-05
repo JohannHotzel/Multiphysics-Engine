@@ -6,8 +6,11 @@
 
 //Collsion
 #pragma kernel BuildClothAabbs
+
 #pragma kernel BuildSphereConstraints
 #pragma kernel BuildCapsuleConstraints
+#pragma kernel BuildBoxConstraints
+
 #pragma kernel SolveCollisionConstraints
 #pragma kernel ResetCollisionCounts
 
@@ -48,6 +51,15 @@ struct CapsuleCollider
     float r;
 };
 
+struct BoxCollider
+{
+    float3 center;
+    float3 axisRight;
+    float3 axisUp;
+    float3 axisForward;
+    float3 halfExtents;
+};
+
 struct CollisionConstraint
 {
     float3 target; 
@@ -82,6 +94,9 @@ int sphereCount;
 
 StructuredBuffer<CapsuleCollider> capsules;
 int capsuleCount;
+
+StructuredBuffer<BoxCollider> boxes;
+int boxCount;
 
 RWStructuredBuffer<uint> deltaX;
 RWStructuredBuffer<uint> deltaY;
@@ -276,6 +291,8 @@ void BuildClothAabbs(uint3 id : SV_DispatchThreadID)
 
 
 // ------------------ BuildCollisionConstraints (per particle) ------------------
+
+// Sphere Collision
 inline bool CollideSphere(float3 x, float pr, SphereCollider sc, out float3 target, out float3 n)
 {
     float3 d = x - sc.center;
@@ -294,32 +311,6 @@ inline bool CollideSphere(float3 x, float pr, SphereCollider sc, out float3 targ
 
     target = sc.center + n * sc.radius;
 
-    return true;
-}
-
-
-inline float3 ClosestPointOnSegment(float3 a, float3 b, float3 p)
-{
-    float3 ab = b - a;
-    float t = dot(p - a, ab) / max(dot(ab, ab), 1e-8);
-    t = clamp(t, 0.0, 1.0);
-    return a + t * ab;
-}
-inline bool CollideCapsule(float3 x, float pr, CapsuleCollider c, out float3 target, out float3 n)
-{
-    float3 q = ClosestPointOnSegment(c.p0, c.p1, x);
-    float3 d = x - q;
-    float dist = length(d);
-
-    const float EPS = 1e-6f;
-    float rCombined = c.r + pr;
-    float pen = rCombined - dist;
-    if (pen <= 0.0f)
-        return false;
-
-    n = (dist > EPS) ? (d / dist) : float3(0, 1, 0);
-
-    target = q + n * c.r;
     return true;
 }
 
@@ -362,6 +353,34 @@ void BuildSphereConstraints(uint3 id : SV_DispatchThreadID)
     }
 }
 
+
+// Capsule Collision
+inline float3 ClosestPointOnSegment(float3 a, float3 b, float3 p)
+{
+    float3 ab = b - a;
+    float t = dot(p - a, ab) / max(dot(ab, ab), 1e-8);
+    t = clamp(t, 0.0, 1.0);
+    return a + t * ab;
+}
+
+inline bool CollideCapsule(float3 x, float pr, CapsuleCollider c, out float3 target, out float3 n)
+{
+    float3 q = ClosestPointOnSegment(c.p0, c.p1, x);
+    float3 d = x - q;
+    float dist = length(d);
+
+    const float EPS = 1e-6f;
+    float rCombined = c.r + pr;
+    float pen = rCombined - dist;
+    if (pen <= 0.0f)
+        return false;
+
+    n = (dist > EPS) ? (d / dist) : float3(0, 1, 0);
+
+    target = q + n * c.r;
+    return true;
+}
+
 [numthreads(THREADS, 1, 1)]
 void BuildCapsuleConstraints(uint3 id : SV_DispatchThreadID)
 {
@@ -401,6 +420,104 @@ void BuildCapsuleConstraints(uint3 id : SV_DispatchThreadID)
     }
 }
 
+
+// Box Collision
+inline float3 ClosestPointOnOBB(float3 p, BoxCollider b, out float3 normal, out float signedDist)
+{
+    float3 d = p - b.center;
+
+    float x = dot(d, b.axisRight);
+    float y = dot(d, b.axisUp);
+    float z = dot(d, b.axisForward);
+
+    float3 q = float3(x, y, z);
+
+    float3 c = clamp(q, -b.halfExtents, b.halfExtents);
+
+    float3 worldC = b.center + b.axisRight * c.x + b.axisUp * c.y + b.axisForward * c.z;
+
+    float3 over = q - c;
+
+    //point is inside the box
+    if (all(over == 0))
+    {
+        float3 distToFace = b.halfExtents - abs(q);
+        
+        if (distToFace.x < distToFace.y && distToFace.x < distToFace.z)
+            normal = (x > 0) ? b.axisRight : -b.axisRight;
+        else if (distToFace.y < distToFace.z)
+            normal = (y > 0) ? b.axisUp : -b.axisUp;
+        else
+            normal = (z > 0) ? b.axisForward : -b.axisForward;
+
+        signedDist = -min(distToFace.x, min(distToFace.y, distToFace.z));
+    }
+    
+    //point is outside the box
+    else
+    {
+        float3 nLocal = normalize(over);
+        normal = normalize(b.axisRight * nLocal.x + b.axisUp * nLocal.y + b.axisForward * nLocal.z);
+        signedDist = length(p - worldC);
+    }
+
+    return worldC;
+}
+
+inline bool CollideBox(float3 x, float pr, BoxCollider b, out float3 target, out float3 n)
+{
+    float signedDist;
+    float3 cp = ClosestPointOnOBB(x, b, n, signedDist);
+
+    float dist = length(x - cp);
+
+    target = cp;
+
+    if (all(x == cp))
+    {
+        return true;
+    }
+    return (dist < pr + 1e-6f);
+}
+
+[numthreads(THREADS, 1, 1)]
+void BuildBoxConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
+
+    [branch]
+    if (boxCount == 0)
+        return;
+
+    [loop]
+    for (int b = 0; b < boxCount; b++)
+    {
+        float3 target, n;
+        if (CollideBox(x, pr, boxes[b], target, n))
+        {
+            uint idx;
+            InterlockedAdd(collisionCounts[i], 1, idx);
+            if (idx < MAX_COLLISIONS)
+            {
+                uint writeIndex = i * MAX_COLLISIONS + idx;
+                CollisionConstraint cc;
+                cc.target = target;
+                cc.normal = n;
+                cc.radius = pr;
+                collisionConstraints[writeIndex] = cc;
+            }
+        }
+    }
+}
 
 
 // ------------------ SolveCollisionConstraints (per particle) ------------------

@@ -32,7 +32,23 @@ public struct GpuCapsuleCollider
 
 public struct GpuBoxCollider
 {
+    public Vector3 center;
+    public Vector3 axisRight;
+    public Vector3 axisUp;
+    public Vector3 axisForward;
+    public Vector3 halfExtents;
 
+    // 3*3 + 3 + 3 = 12 floats
+    public const int Stride = sizeof(float) * (3 + 3 + 3 + 3 + 3);
+
+    public GpuBoxCollider(Vector3 c, Vector3 r, Vector3 u, Vector3 f, Vector3 he)
+    {
+        center = c;
+        axisRight = r;
+        axisUp = u;
+        axisForward = f;
+        halfExtents = he;
+    }
 }
 
 public struct GpuMeshCollider
