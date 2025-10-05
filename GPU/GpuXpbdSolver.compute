@@ -13,7 +13,7 @@
 
 
 #define THREADS 256
-#define MAX_COLLISIONS 8  // muss zu C# passen
+#define MAX_COLLISIONS 8
 #pragma target 5.0
 
 struct Particle

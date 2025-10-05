@@ -11,7 +11,6 @@ public class GpuXpbdSolver : MonoBehaviour
     [SerializeField, Range(0.5f, 2.5f)] private float sorOmega = 1.5f;
     [SerializeField] private ComputeShader compute;
     [SerializeField] private float compliance = 0.0f;
-    [SerializeField] private float boundsPadding = 1.0f;
 
     [Header("Physics")]
     [SerializeField] private Vector3 gravity = new Vector3(0f, -9.81f, 0f);
@@ -21,6 +20,11 @@ public class GpuXpbdSolver : MonoBehaviour
     [SerializeField] private float maxSeparationSpeed = 1.5f;
     [SerializeField] private LayerMask overlapLayerMask = ~0;
     [SerializeField] private QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Ignore;
+
+    [Header("GPU Collision")]
+    [SerializeField] private float boundsPadding = 1.0f;
+    [SerializeField] private float bufferGrowFactor = 1.5f;
+
     #endregion
 
     #region === Public Readonly API ===
@@ -409,31 +413,36 @@ public class GpuXpbdSolver : MonoBehaviour
             }
         }
 
-        // --- Spheres ---
+        // --- SphereColliders ---
         int sphereCount = _sphereCollidersScratch.Count;
         compute.SetInt(Sid.SphereCount, sphereCount);
 
-        if (sphereCount == 0) SafeRelease(ref SphereBuffer);
-        else
+        if (sphereCount > 0)
         {
-            SafeRelease(ref SphereBuffer);
-            SphereBuffer = new ComputeBuffer(sphereCount, GpuSphereCollider.Stride, ComputeBufferType.Structured);
-            SphereBuffer.SetData(_sphereCollidersScratch);
+            EnsureBuffer(ref SphereBuffer, sphereCount, GpuSphereCollider.Stride);
+            SphereBuffer.SetData(_sphereCollidersScratch.ToArray(), 0, 0, sphereCount);
             compute.SetBuffer(Kid.BuildSphereConstraints, Sid.Spheres, SphereBuffer);
         }
 
-        // --- Capsules ---
+        // --- CapsuleColliders ---
         int capsuleCount = _capsuleCollidersScratch.Count;
         compute.SetInt(Sid.CapsuleCount, capsuleCount);
 
-        if (capsuleCount == 0) SafeRelease(ref CapsuleBuffer);
-        else
+        if (capsuleCount > 0)
         {
-            SafeRelease(ref CapsuleBuffer);
-            CapsuleBuffer = new ComputeBuffer(capsuleCount, GpuCapsuleCollider.Stride, ComputeBufferType.Structured);
-            CapsuleBuffer.SetData(_capsuleCollidersScratch);
+            EnsureBuffer(ref CapsuleBuffer, capsuleCount, GpuCapsuleCollider.Stride);
+            CapsuleBuffer.SetData(_capsuleCollidersScratch.ToArray(), 0, 0, capsuleCount);
             compute.SetBuffer(Kid.BuildCapsuleConstraints, Sid.Capsules, CapsuleBuffer);
         }
+    }
+    static void EnsureBuffer(ref ComputeBuffer buf, int neededCount, int stride, ComputeBufferType type = ComputeBufferType.Structured, float growFactor = 1.5f)
+    {
+        int current = (buf == null) ? 0 : buf.count;
+        if (current >= neededCount && buf != null) return;
+
+        int newCount = Mathf.Max(neededCount, Mathf.Max(64, current > 0 ? Mathf.CeilToInt(current * growFactor) : neededCount));
+        if (buf != null) { buf.Dispose(); buf = null; }
+        buf = new ComputeBuffer(newCount, stride, type);
     }
 
 
