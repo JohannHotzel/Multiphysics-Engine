@@ -76,9 +76,9 @@ struct MeshRange
 
 struct CollisionConstraint
 {
-    float3 target; 
+    float3 target;
     float3 normal;
-    float radius;   
+    float radius;
 };
 
 struct ClothRange
@@ -122,7 +122,7 @@ RWStructuredBuffer<uint> deltaZ;
 RWStructuredBuffer<uint> countBuf;
 
 RWStructuredBuffer<CollisionConstraint> collisionConstraints;
-RWStructuredBuffer<uint> collisionCounts; 
+RWStructuredBuffer<uint> collisionCounts;
 
 
 float dt, dts, dts2;
@@ -235,7 +235,7 @@ void SolveDistanceJacobi(uint3 tid : SV_DispatchThreadID)
 [numthreads(THREADS, 1, 1)]
 void ApplyDeltas(uint3 id : SV_DispatchThreadID)
 {
-    uint i = id.x; 
+    uint i = id.x;
     if (i >= particleCount)
         return;
 
@@ -688,7 +688,7 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
         {
             //Bias to clamp maximum velocity
             float d0 = -C;
-            float bias = (vMax > 0.0f) ? max(d0 - vMax * dts, 0.0f) : 0.0f; 
+            float bias = (vMax > 0.0f) ? max(d0 - vMax * dts, 0.0f) : 0.0f;
             float phi = C + bias;
 
             if (phi < 0.0f)
@@ -711,5 +711,4 @@ void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
     
     collisionCounts[i] = 0;
 }
-
 

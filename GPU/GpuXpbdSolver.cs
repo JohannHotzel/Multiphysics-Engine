@@ -24,6 +24,7 @@ public class GpuXpbdSolver : MonoBehaviour
     [Header("GPU Collision")]
     [SerializeField] private float boundsPadding = 1.0f;
     [SerializeField] private float bufferGrowFactor = 1.5f;
+    [SerializeField] private float collisionMargin = 0.01f;
 
     #endregion
 
@@ -83,16 +84,16 @@ public class GpuXpbdSolver : MonoBehaviour
         public static readonly int VMax = Shader.PropertyToID("vMax");
         public static readonly int CollisionConstraints = Shader.PropertyToID("collisionConstraints");
         public static readonly int CollisionCounts = Shader.PropertyToID("collisionCounts");
-        
+
         public static readonly int Spheres = Shader.PropertyToID("spheres");
         public static readonly int SphereCount = Shader.PropertyToID("sphereCount");
         public static readonly int Capsules = Shader.PropertyToID("capsules");
         public static readonly int CapsuleCount = Shader.PropertyToID("capsuleCount");
-        public static readonly int Boxes = Shader.PropertyToID("boxes");    
+        public static readonly int Boxes = Shader.PropertyToID("boxes");
         public static readonly int BoxCount = Shader.PropertyToID("boxCount");
-        public static readonly int MeshTriangles = Shader.PropertyToID("meshTriangles"); 
-        public static readonly int MeshRanges = Shader.PropertyToID("meshRanges");   
-        public static readonly int MeshCount = Shader.PropertyToID("meshCount");      
+        public static readonly int MeshTriangles = Shader.PropertyToID("meshTriangles");
+        public static readonly int MeshRanges = Shader.PropertyToID("meshRanges");
+        public static readonly int MeshCount = Shader.PropertyToID("meshCount");
         public static readonly int TriangleCount = Shader.PropertyToID("triangleCount");
 
         public static readonly int Omega = Shader.PropertyToID("omega");
@@ -114,7 +115,7 @@ public class GpuXpbdSolver : MonoBehaviour
     // Collision detection scratch
     private Aabb[] _aabbCpu;
 
-    private readonly HashSet<Collider> _overlapSet = new();                 
+    private readonly HashSet<Collider> _overlapSet = new();
     private readonly List<GpuSphereCollider> _sphereCollidersScratch = new();
     private readonly List<GpuCapsuleCollider> _capsuleCollidersScratch = new();
     private readonly List<GpuBoxCollider> _boxCollidersScratch = new();
@@ -276,7 +277,7 @@ public class GpuXpbdSolver : MonoBehaviour
         ZeroAccumulators();
 
         // Bind common buffers to kernels
-        foreach (int k in new[]{ Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints, Kid.SolveCollisionConstraints })
+        foreach (int k in new[] { Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints, Kid.SolveCollisionConstraints })
         {
             compute.SetBuffer(k, Sid.Particles, ParticleBuffer);
         }
