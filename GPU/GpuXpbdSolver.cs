@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
+using static GpuXpbdShaderIds;
 
 public class GpuXpbdSolver : MonoBehaviour
 {
@@ -42,68 +42,6 @@ public class GpuXpbdSolver : MonoBehaviour
 
     #endregion
 
-    #region === Constants / IDs ===
-    private const int THREADS = 256;
-
-    // Kernel IDs
-    private static class Kid
-    {
-        public static int Predict;
-        public static int Integrate;
-        public static int SolveDistanceJacobi;
-        public static int ApplyDeltas;
-        public static int UpdateVelocities;
-
-        public static int BuildSphereConstraints;
-        public static int BuildCapsuleConstraints;
-        public static int BuildBoxConstraints;
-        public static int BuildMeshConstraints;
-
-        public static int SolveCollisionConstraints;
-        public static int ResetCollisionCounts;
-        public static int BuildClothAabbs;
-    }
-
-    // Shader property IDs
-    private static class Sid
-    {
-        public static readonly int Particles = Shader.PropertyToID("particles");
-        public static readonly int ParticleCount = Shader.PropertyToID("particleCount");
-
-        public static readonly int Constraints = Shader.PropertyToID("constraints");
-        public static readonly int ConstraintCount = Shader.PropertyToID("constraintCount");
-        public static readonly int DeltaX = Shader.PropertyToID("deltaX");
-        public static readonly int DeltaY = Shader.PropertyToID("deltaY");
-        public static readonly int DeltaZ = Shader.PropertyToID("deltaZ");
-        public static readonly int CountBuf = Shader.PropertyToID("countBuf");
-
-        //Colliders
-        public static readonly int ClothRanges = Shader.PropertyToID("clothRanges");
-        public static readonly int ClothAabbs = Shader.PropertyToID("clothAabbs");
-
-        public static readonly int VMax = Shader.PropertyToID("vMax");
-        public static readonly int CollisionConstraints = Shader.PropertyToID("collisionConstraints");
-        public static readonly int CollisionCounts = Shader.PropertyToID("collisionCounts");
-
-        public static readonly int Spheres = Shader.PropertyToID("spheres");
-        public static readonly int SphereCount = Shader.PropertyToID("sphereCount");
-        public static readonly int Capsules = Shader.PropertyToID("capsules");
-        public static readonly int CapsuleCount = Shader.PropertyToID("capsuleCount");
-        public static readonly int Boxes = Shader.PropertyToID("boxes");
-        public static readonly int BoxCount = Shader.PropertyToID("boxCount");
-        public static readonly int MeshTriangles = Shader.PropertyToID("meshTriangles");
-        public static readonly int MeshRanges = Shader.PropertyToID("meshRanges");
-        public static readonly int MeshCount = Shader.PropertyToID("meshCount");
-        public static readonly int TriangleCount = Shader.PropertyToID("triangleCount");
-
-        public static readonly int Omega = Shader.PropertyToID("omega");
-        public static readonly int Dt = Shader.PropertyToID("dt");
-        public static readonly int Dts = Shader.PropertyToID("dts");
-        public static readonly int Dts2 = Shader.PropertyToID("dts2");
-        public static readonly int Gravity = Shader.PropertyToID("gravity");
-    }
-    #endregion
-
     #region === Internal State / Scratch ===
     private int particleCount;
     private int constraintCount;
@@ -134,23 +72,7 @@ public class GpuXpbdSolver : MonoBehaviour
             return;
         }
 
-        // Cache kernel IDs once
-        Kid.Predict = compute.FindKernel("Predict");
-        Kid.Integrate = compute.FindKernel("Integrate");
-        Kid.SolveDistanceJacobi = compute.FindKernel("SolveDistanceJacobi");
-        Kid.ApplyDeltas = compute.FindKernel("ApplyDeltas");
-        Kid.UpdateVelocities = compute.FindKernel("UpdateVelocities");
-
-
-        Kid.BuildSphereConstraints = compute.FindKernel("BuildSphereConstraints");
-        Kid.BuildCapsuleConstraints = compute.FindKernel("BuildCapsuleConstraints");
-        Kid.BuildBoxConstraints = compute.FindKernel("BuildBoxConstraints");
-        Kid.BuildMeshConstraints = compute.FindKernel("BuildMeshConstraints");
-
-        Kid.SolveCollisionConstraints = compute.FindKernel("SolveCollisionConstraints");
-        Kid.ResetCollisionCounts = compute.FindKernel("ResetCollisionCounts");
-        Kid.BuildClothAabbs = compute.FindKernel("BuildClothAabbs");
-
+        Kid.Init(compute);
 
         RegisterAllCloths();
         InitializeBuffers();
