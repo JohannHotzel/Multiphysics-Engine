@@ -1,0 +1,714 @@
+﻿#pragma kernel Predict
+#pragma kernel Integrate
+#pragma kernel SolveDistanceJacobi
+#pragma kernel ApplyDeltas
+#pragma kernel UpdateVelocities
+
+//Collsion
+#pragma kernel BuildClothAabbs
+
+#pragma kernel BuildSphereConstraints
+#pragma kernel BuildCapsuleConstraints
+#pragma kernel BuildBoxConstraints
+#pragma kernel BuildMeshConstraints
+
+#pragma kernel SolveCollisionConstraints
+#pragma kernel ResetCollisionCounts
+
+
+#define THREADS 256
+#define MAX_COLLISIONS 8
+#pragma target 5.0
+
+struct Particle
+{
+    float3 positionP; // previous
+    float3 positionX; // current
+    float3 positionPredicted; // predicted (for collision handling)
+    float3 velocity;
+    float m;
+    float w;
+    float radius;
+};
+
+struct DistanceConstraint
+{
+    uint i;
+    uint j;
+    float rest;
+    float compliance;
+};
+
+struct SphereCollider
+{
+    float3 center;
+    float radius;
+};
+
+struct CapsuleCollider
+{
+    float3 p0;
+    float3 p1;
+    float r;
+};
+
+struct BoxCollider
+{
+    float3 center;
+    float3 axisRight;
+    float3 axisUp;
+    float3 axisForward;
+    float3 halfExtents;
+};
+
+struct Triangle
+{
+    float3 a;
+    float3 b;
+    float3 c;
+};
+
+struct MeshRange
+{
+    uint start;
+    uint count;
+};
+
+struct CollisionConstraint
+{
+    float3 target;
+    float3 normal;
+    float radius;
+};
+
+struct ClothRange
+{
+    uint start;
+    uint count;
+};
+
+struct Aabb
+{
+    float3 mn;
+    float3 mx;
+};
+
+
+RWStructuredBuffer<Particle> particles;
+int particleCount;
+
+StructuredBuffer<DistanceConstraint> constraints;
+int constraintCount;
+
+StructuredBuffer<ClothRange> clothRanges;
+RWStructuredBuffer<Aabb> clothAabbs;
+
+StructuredBuffer<SphereCollider> spheres;
+int sphereCount;
+
+StructuredBuffer<CapsuleCollider> capsules;
+int capsuleCount;
+
+StructuredBuffer<BoxCollider> boxes;
+int boxCount;
+
+StructuredBuffer<Triangle> meshTriangles;
+StructuredBuffer<MeshRange> meshRanges;
+int meshCount;
+
+RWStructuredBuffer<uint> deltaX;
+RWStructuredBuffer<uint> deltaY;
+RWStructuredBuffer<uint> deltaZ;
+RWStructuredBuffer<uint> countBuf;
+
+RWStructuredBuffer<CollisionConstraint> collisionConstraints;
+RWStructuredBuffer<uint> collisionCounts;
+
+
+float dt, dts, dts2;
+float3 gravity;
+float omega;
+float vMax;
+
+#define ATOMIC_ADD_FLOAT_UAV(UAV, IDX, VAL)            \
+{                                                      \
+    uint _old = UAV[IDX];                              \
+    for (;;)                                           \
+    {                                                  \
+        float _oldF = asfloat(_old);                   \
+        float _newF = _oldF + (VAL);                   \
+        uint  _new  = asuint(_newF);                   \
+        uint  _prev;                                   \
+        InterlockedCompareExchange(UAV[IDX], _old, _new, _prev); \
+        if (_prev == _old) break;                      \
+        _old = _prev;                                  \
+    }                                                  \
+}
+
+
+// ------------------ KERNEL 0: PREDICT ------------------ 
+[numthreads(THREADS, 1, 1)]
+void Predict(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    
+    float3 velocity = p.velocity + gravity * dt;
+    p.positionPredicted = p.positionX + velocity * dt;
+    
+    particles[i] = p;
+}
+
+
+// ------------------ KERNEL 1: INTEGRATE ------------------
+[numthreads(THREADS, 1, 1)]
+void Integrate(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    p.positionP = p.positionX;
+
+    if (p.w > 0)
+    {
+        p.velocity += gravity * dts;
+        p.positionX += p.velocity * dts;
+    }
+
+    particles[i] = p;
+}
+
+// --------- KERNEL 2: DISTANCE ---------------
+[numthreads(THREADS, 1, 1)]
+void SolveDistanceJacobi(uint3 tid : SV_DispatchThreadID)
+{
+    uint c = tid.x;
+    if (c >= constraintCount)
+        return;
+
+    DistanceConstraint con = constraints[c];
+    uint i = con.i;
+    uint j = con.j;
+
+    Particle pi = particles[i];
+    Particle pj = particles[j];
+
+    if (pi.w == 0 && pj.w == 0)
+        return;
+
+    float3 d = pi.positionX - pj.positionX;
+    float len = length(d);
+    
+    if (len <= 1e-6f)
+        return;
+
+    float3 n = d / len;
+    float C = len - con.rest;
+
+
+    // XPBD
+    float wt = pi.w + pj.w;
+    float alphaT = con.compliance / dts2;
+    float dLambda = -C / (wt + alphaT);
+
+    float3 dxi = +pi.w * dLambda * n;
+    float3 dxj = -pj.w * dLambda * n;
+
+    ATOMIC_ADD_FLOAT_UAV(deltaX, i, dxi.x);
+    ATOMIC_ADD_FLOAT_UAV(deltaY, i, dxi.y);
+    ATOMIC_ADD_FLOAT_UAV(deltaZ, i, dxi.z);
+
+    ATOMIC_ADD_FLOAT_UAV(deltaX, j, dxj.x);
+    ATOMIC_ADD_FLOAT_UAV(deltaY, j, dxj.y);
+    ATOMIC_ADD_FLOAT_UAV(deltaZ, j, dxj.z);
+
+    InterlockedAdd(countBuf[i], 1);
+    InterlockedAdd(countBuf[j], 1);
+}
+
+// ------------- KERNEL 3: APPLY DELTAS (Averaging + ω) ----------
+[numthreads(THREADS, 1, 1)]
+void ApplyDeltas(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    uint n = countBuf[i];
+    if (n > 0)
+    {
+        float3 delta = float3(asfloat(deltaX[i]), asfloat(deltaY[i]), asfloat(deltaZ[i]));
+        Particle p = particles[i];
+        p.positionX += delta * (omega / (float) n); // Δx_i = (ω/n) * ΣΔx
+        particles[i] = p;
+    }
+
+    // Reset
+    deltaX[i] = 0;
+    deltaY[i] = 0;
+    deltaZ[i] = 0;
+    countBuf[i] = 0;
+}
+
+// ------------------ KERNEL 4: UPDATE VELOCITIES ------------------
+[numthreads(THREADS, 1, 1)]
+void UpdateVelocities(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w > 0)
+        p.velocity = (p.positionX - p.positionP) / dts;
+
+    particles[i] = p;
+}
+
+
+
+[numthreads(1, 1, 1)]
+void BuildClothAabbs(uint3 id : SV_DispatchThreadID)
+{
+    uint c = id.x;
+
+    ClothRange r = clothRanges[c];
+    uint start = r.start;
+    uint count = r.count;
+
+    if (count == 0)
+    {
+        Aabb a;
+        a.mn = float3(0, 0, 0);
+        a.mx = float3(0, 0, 0);
+        clothAabbs[c] = a;
+        return;
+    }
+
+    float3 mn = float3(+3.4e38f, +3.4e38f, +3.4e38f);
+    float3 mx = float3(-3.4e38f, -3.4e38f, -3.4e38f);
+
+    [loop]
+    for (uint i = 0; i < count; i++)
+    {
+        float3 p = particles[start + i].positionPredicted;
+        mn = min(mn, p);
+        mx = max(mx, p);
+    }
+
+    Aabb outAabb;
+    outAabb.mn = mn;
+    outAabb.mx = mx;
+    clothAabbs[c] = outAabb;
+}
+
+
+// ------------------ BuildCollisionConstraints (per particle) ------------------
+
+// Sphere Collision
+inline bool CollideSphere(float3 x, float pr, SphereCollider sc, out float3 target, out float3 n)
+{
+    float3 d = x - sc.center;
+    float dist = length(d);
+    
+    const float EPS = 1e-6f;
+
+    float rCombined = sc.radius + pr;
+
+    float pen = rCombined - dist;
+    if (pen <= 0.0f)
+        return false;
+
+    n = (dist > EPS) ? (d / dist) : float3(0, 1, 0);
+
+
+    target = sc.center + n * sc.radius;
+
+    return true;
+}
+
+[numthreads(THREADS, 1, 1)]
+void BuildSphereConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
+
+    [branch]
+    if (sphereCount == 0)
+        return;
+
+    [loop]
+    for (int s = 0; s < sphereCount; s++)
+    {
+        float3 target, n;
+        if (CollideSphere(x, pr, spheres[s], target, n))
+        {
+            uint idx;
+            InterlockedAdd(collisionCounts[i], 1, idx);
+            if (idx < MAX_COLLISIONS)
+            {
+                uint writeIndex = i * MAX_COLLISIONS + idx;
+                CollisionConstraint cc;
+                cc.target = target;
+                cc.normal = n;
+                cc.radius = pr;
+                collisionConstraints[writeIndex] = cc;
+            }
+        }
+    }
+}
+
+
+// Capsule Collision
+inline float3 ClosestPointOnSegment(float3 a, float3 b, float3 p)
+{
+    float3 ab = b - a;
+    float t = dot(p - a, ab) / max(dot(ab, ab), 1e-8);
+    t = clamp(t, 0.0, 1.0);
+    return a + t * ab;
+}
+
+inline bool CollideCapsule(float3 x, float pr, CapsuleCollider c, out float3 target, out float3 n)
+{
+    float3 q = ClosestPointOnSegment(c.p0, c.p1, x);
+    float3 d = x - q;
+    float dist = length(d);
+
+    const float EPS = 1e-6f;
+    float rCombined = c.r + pr;
+    float pen = rCombined - dist;
+    if (pen <= 0.0f)
+        return false;
+
+    n = (dist > EPS) ? (d / dist) : float3(0, 1, 0);
+
+    target = q + n * c.r;
+    return true;
+}
+
+[numthreads(THREADS, 1, 1)]
+void BuildCapsuleConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
+
+    [branch]
+    if (capsuleCount == 0)
+        return;
+
+    [loop]
+    for (int c = 0; c < capsuleCount; c++)
+    {
+        float3 target, n;
+        if (CollideCapsule(x, pr, capsules[c], target, n))
+        {
+            uint idx;
+            InterlockedAdd(collisionCounts[i], 1, idx);
+            if (idx < MAX_COLLISIONS)
+            {
+                uint writeIndex = i * MAX_COLLISIONS + idx;
+                CollisionConstraint cc;
+                cc.target = target;
+                cc.normal = n;
+                cc.radius = pr;
+                collisionConstraints[writeIndex] = cc;
+            }
+        }
+    }
+}
+
+
+// Box Collision
+inline float3 ClosestPointOnOBB(float3 p, BoxCollider b, out float3 normal, out float signedDist)
+{
+    float3 d = p - b.center;
+
+    float x = dot(d, b.axisRight);
+    float y = dot(d, b.axisUp);
+    float z = dot(d, b.axisForward);
+
+    float3 q = float3(x, y, z);
+
+    float3 c = clamp(q, -b.halfExtents, b.halfExtents);
+
+    float3 worldC = b.center + b.axisRight * c.x + b.axisUp * c.y + b.axisForward * c.z;
+
+    float3 over = q - c;
+
+    //point is inside the box
+    if (all(over == 0))
+    {
+        float3 distToFace = b.halfExtents - abs(q);
+        
+        if (distToFace.x < distToFace.y && distToFace.x < distToFace.z)
+            normal = (x > 0) ? b.axisRight : -b.axisRight;
+        else if (distToFace.y < distToFace.z)
+            normal = (y > 0) ? b.axisUp : -b.axisUp;
+        else
+            normal = (z > 0) ? b.axisForward : -b.axisForward;
+
+        signedDist = -min(distToFace.x, min(distToFace.y, distToFace.z));
+    }
+    
+    //point is outside the box
+    else
+    {
+        float3 nLocal = normalize(over);
+        normal = normalize(b.axisRight * nLocal.x + b.axisUp * nLocal.y + b.axisForward * nLocal.z);
+        signedDist = length(p - worldC);
+    }
+
+    return worldC;
+}
+
+inline bool CollideBox(float3 x, float pr, BoxCollider b, out float3 target, out float3 n)
+{
+    float signedDist;
+    float3 cp = ClosestPointOnOBB(x, b, n, signedDist);
+
+    float dist = length(x - cp);
+
+    target = cp;
+
+    if (all(x == cp))
+    {
+        return true;
+    }
+    return (dist < pr + 1e-6f);
+}
+
+[numthreads(THREADS, 1, 1)]
+void BuildBoxConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
+
+    [branch]
+    if (boxCount == 0)
+        return;
+
+    [loop]
+    for (int b = 0; b < boxCount; b++)
+    {
+        float3 target, n;
+        if (CollideBox(x, pr, boxes[b], target, n))
+        {
+            uint idx;
+            InterlockedAdd(collisionCounts[i], 1, idx);
+            if (idx < MAX_COLLISIONS)
+            {
+                uint writeIndex = i * MAX_COLLISIONS + idx;
+                CollisionConstraint cc;
+                cc.target = target;
+                cc.normal = n;
+                cc.radius = pr;
+                collisionConstraints[writeIndex] = cc;
+            }
+        }
+    }
+}
+
+
+// Mesh Collision (still primitive solution because only overlapping triangles are count as collisions)
+inline float3 ClosestPointOnTriangle(float3 p, float3 a, float3 b, float3 c)
+{
+    float3 ab = b - a;
+    float3 ac = c - a;
+    float3 ap = p - a;
+
+    float d1 = dot(ab, ap);
+    float d2 = dot(ac, ap);
+    if (d1 <= 0 && d2 <= 0)
+        return a;
+
+    float3 bp = p - b;
+    float d3 = dot(ab, bp);
+    float d4 = dot(ac, bp);
+    if (d3 >= 0 && d4 <= d3)
+        return b;
+
+    float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0)
+    {
+        float v = d1 / (d1 - d3);
+        return a + v * ab;
+    }
+
+    float3 cp = p - c;
+    float d5 = dot(ab, cp);
+    float d6 = dot(ac, cp);
+    if (d6 >= 0 && d5 <= d6)
+        return c;
+
+    float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0)
+    {
+        float w = d2 / (d2 - d6);
+        return a + w * ac;
+    }
+
+    float va = d3 * d6 - d5 * d4;
+    if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0)
+    {
+        float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return b + w * (c - b);
+    }
+
+    // Inside face region
+    float3 n = normalize(cross(ab, ac));
+    float dist = dot(p - a, n);
+    return p - dist * n;
+}
+
+inline bool CollideTriangle(float3 x, float pr, Triangle tri, out float3 target, out float3 n)
+{
+    float3 cp = ClosestPointOnTriangle(x, tri.a, tri.b, tri.c);
+    float3 d = x - cp;
+    float dist = length(d);
+
+    if (dist <= pr + 1e-6f)
+    {
+        float3 ab = tri.b - tri.a;
+        float3 ac = tri.c - tri.a;
+        float3 nn = cross(ab, ac);
+        float len = length(nn);
+        n = (len > 1e-6f) ? (nn / len) : float3(0, 1, 0);
+        target = cp;
+        return true;
+    }
+
+    target = cp;
+    n = float3(0, 1, 0);
+    return false;
+}
+
+[numthreads(THREADS, 1, 1)]
+void BuildMeshConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    if (meshCount == 0)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
+
+    [loop]
+    for (int m = 0; m < meshCount; m++)
+    {
+        MeshRange r = meshRanges[m];
+        uint start = r.start;
+        uint count = r.count;
+
+        [loop]
+        for (uint t = 0; t < count; t++)
+        {
+            Triangle tri = meshTriangles[start + t];
+
+            float3 target, n;
+            if (CollideTriangle(x, pr, tri, target, n))
+            {
+                uint idx;
+                InterlockedAdd(collisionCounts[i], 1, idx);
+                if (idx < MAX_COLLISIONS)
+                {
+                    uint writeIndex = i * MAX_COLLISIONS + idx;
+                    CollisionConstraint cc;
+                    cc.target = target;
+                    cc.normal = n;
+                    cc.radius = pr;
+                    collisionConstraints[writeIndex] = cc;
+                }
+            }
+        }
+    }
+}
+
+
+// ------------------ SolveCollisionConstraints (per particle) ------------------
+[numthreads(THREADS, 1, 1)]
+void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle p = particles[i];
+    if (p.w == 0.0f)
+        return;
+
+    uint n = collisionCounts[i];
+    if (n == 0)
+        return;
+    n = (n > MAX_COLLISIONS) ? MAX_COLLISIONS : n;
+
+    for (uint k = 0; k < n; k++)
+    {
+        uint readIndex = i * MAX_COLLISIONS + k;
+        CollisionConstraint cc = collisionConstraints[readIndex];
+
+        float C = dot(p.positionX - cc.target, cc.normal) - cc.radius;
+        
+        if (C < 0.0f)
+        {
+            //Bias to clamp maximum velocity
+            float d0 = -C;
+            float bias = (vMax > 0.0f) ? max(d0 - vMax * dts, 0.0f) : 0.0f;
+            float phi = C + bias;
+
+            if (phi < 0.0f)
+            {
+                p.positionX -= cc.normal * phi;
+            }
+        }
+    }
+
+    particles[i] = p;
+}
+
+// ------------------ Reset Collision Counts ------------------
+[numthreads(THREADS, 1, 1)]
+void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+    
+    collisionCounts[i] = 0;
+}
+
