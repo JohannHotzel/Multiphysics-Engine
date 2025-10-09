@@ -9,12 +9,21 @@ public class GpuCloth : MonoBehaviour
     public float width = 10f;
     public float height = 10f;
 
+    [Header("Constraint Types")]
+    public bool useStructural = true;
+    public bool useShear = true;
+    public bool useFlexion = true;
+    [Range(0f, 1f)] public float structuralCompliance = 0f;
+    [Range(0f, 1f)] public float shearCompliance = 0f;
+    [Range(0f, 1f)] public float flexionCompliance = 0f;
+
     [Header("Pinning")]
     public bool pinTopRow = true;
 
     [Header("Overrides (optional)")]
     public float? particleRadiusOverride;
-    public float? complianceOverride;
+
+
 
     [HideInInspector] public int startIndex;  
     [HideInInspector] public int count;      
@@ -32,7 +41,7 @@ public class GpuCloth : MonoBehaviour
         }
     }
 
-    public void Build(out GpuParticle[] particles, out GpuDistanceConstraint[] constraints, float defaultRadius, float defaultCompliance)
+    public void Build(out GpuParticle[] particles, out GpuDistanceConstraint[] constraints, float defaultRadius)
     {
         int nX = Mathf.Max(1, numParticlesX);
         int nY = Mathf.Max(1, numParticlesY);
@@ -46,7 +55,6 @@ public class GpuCloth : MonoBehaviour
         float offsetY = (nY > 1) ? height * 0.5f : 0f;
 
         float radius = particleRadiusOverride ?? defaultRadius;
-        float compliance = complianceOverride ?? defaultCompliance;
 
         int idx = 0;
         for (int j = 0; j < nY; j++)
@@ -67,13 +75,37 @@ public class GpuCloth : MonoBehaviour
         }
 
         var cons = new List<GpuDistanceConstraint>();
+
+        float dDiag = Mathf.Sqrt(dx * dx + dy * dy); 
+        float dFlexX = 2f * dx;                       
+        float dFlexY = 2f * dy;                     
+
         for (int y = 0; y < nY; y++)
+        {
             for (int x = 0; x < nX; x++)
             {
                 int i = y * nX + x;
-                if (x + 1 < nX) cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + 1), dx, compliance));
-                if (y + 1 < nY) cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + nX), dy, compliance));
+
+                if (useStructural)
+                {
+                    if (x + 1 < nX) cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + 1), dx, structuralCompliance));
+                    if (y + 1 < nY) cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + nX), dy, structuralCompliance));
+                }
+
+
+                if (useShear && x + 1 < nX && y + 1 < nY)
+                {
+                    cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + 1 + nX), dDiag, shearCompliance));
+                    cons.Add(new GpuDistanceConstraint((uint)(i + 1), (uint)(i + nX), dDiag, shearCompliance));
+                }
+
+                if (useFlexion)
+                {
+                    if (x + 2 < nX) cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + 2), dFlexX, flexionCompliance));
+                    if (y + 2 < nY) cons.Add(new GpuDistanceConstraint((uint)i, (uint)(i + 2 * nX), dFlexY, flexionCompliance));
+                }
             }
+        }
 
         constraints = cons.ToArray();
     }

@@ -9,7 +9,6 @@ public class GpuXpbdSolver : MonoBehaviour
     [SerializeField] private int substeps = 10;
     [SerializeField, Range(0.5f, 2.5f)] private float sorOmega = 1.5f;
     [SerializeField] private ComputeShader compute;
-    [SerializeField] private float compliance = 0.0f;
 
     [Header("Physics")]
     [SerializeField] private Vector3 gravity = new Vector3(0f, -9.81f, 0f);
@@ -130,7 +129,7 @@ public class GpuXpbdSolver : MonoBehaviour
         int runningOffset = 0;
         foreach (var c in cloths)
         {
-            c.Build(out var particles, out var constraints, particleRadiusSim, compliance);
+            c.Build(out var particles, out var constraints, particleRadiusSim);
 
             c.startIndex = runningOffset;
             c.count = particles.Length;
