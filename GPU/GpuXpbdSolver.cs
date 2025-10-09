@@ -83,6 +83,7 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.SetVector(Sid.Gravity, gravity);
         compute.SetFloat(Sid.Omega, sorOmega);
         compute.SetFloat(Sid.VMax, maxSeparationSpeed);
+        compute.SetFloat(Sid.CollisionMargin, collisionMargin);
 
         int groupsP = Mathf.CeilToInt(Mathf.Max(1, buffers.ParticleCount) / (float)THREADS);
         int groupsC = Mathf.CeilToInt(Mathf.Max(1, buffers.ConstraintCount) / (float)THREADS);

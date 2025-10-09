@@ -78,5 +78,6 @@ public static class GpuXpbdShaderIds
         public static readonly int Dts2 = Shader.PropertyToID("dts2");
         public static readonly int Gravity = Shader.PropertyToID("gravity");
         public static readonly int VMax = Shader.PropertyToID("vMax");
+        public static readonly int CollisionMargin = Shader.PropertyToID("collisionMargin");
     }
 }

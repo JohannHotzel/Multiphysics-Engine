@@ -56,7 +56,7 @@ float dt, dts, dts2;
 float3 gravity;
 float omega;
 float vMax;
-
+float collisionMargin;
 
 
 #define ATOMIC_ADD_FLOAT_UAV(UAV, IDX, VAL)                      \
@@ -141,7 +141,6 @@ void SolveDistanceJacobi(uint3 tid : SV_DispatchThreadID)
     float C = len - con.rest;
 
 
-    // XPBD
     float wt = pi.w + pj.w;
     float alphaT = con.compliance / dts2;
     float dLambda = -C / (wt + alphaT);
