@@ -18,6 +18,7 @@ public class GpuXpbdSolver : MonoBehaviour
     [SerializeField] private float maxSeparationSpeed = 1.5f;
     [SerializeField] private LayerMask overlapLayerMask = ~0;
     [SerializeField] private QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Ignore;
+    [SerializeField] private bool enableParticleParticleCollision = false;
 
     [Header("GPU Collision")]
     [SerializeField] private float boundsPadding = 1.0f;
@@ -116,13 +117,18 @@ public class GpuXpbdSolver : MonoBehaviour
                 compute.Dispatch(Kid.ApplyDeltas, groupsP, 1, 1);
             }
 
+            if (enableParticleParticleCollision)
+            {
+                compute.Dispatch(Kid.SolveParticleCollisionsNaive, groupsP, 1, 1);
+                compute.Dispatch(Kid.ApplyDeltas, groupsP, 1, 1);
+            }
+
             compute.Dispatch(Kid.ResetCollisionCounts, groupsP, 1, 1);
             if (buffers.SphereBuffer != null) compute.Dispatch(Kid.BuildSphereConstraints, groupsP, 1, 1);
             if (buffers.CapsuleBuffer != null) compute.Dispatch(Kid.BuildCapsuleConstraints, groupsP, 1, 1);
             if (buffers.BoxBuffer != null) compute.Dispatch(Kid.BuildBoxConstraints, groupsP, 1, 1);
             if (buffers.MeshTriangleBuffer != null) compute.Dispatch(Kid.BuildMeshConstraints, groupsP, 1, 1);
             compute.Dispatch(Kid.SolveCollisionConstraints, groupsP, 1, 1);
-
 
             compute.Dispatch(Kid.UpdateVelocities, groupsP, 1, 1);
         }
@@ -224,14 +230,18 @@ public class GpuXpbdSolver : MonoBehaviour
         buffers.BindParticlesTo(compute,
             Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities,
             Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints,
-            Kid.SolveCollisionConstraints, Kid.SetAttachmentPositions
+            Kid.SolveCollisionConstraints, Kid.SetAttachmentPositions, Kid.SolveParticleCollisionsNaive
         );
 
         buffers.BindDistanceSolve(compute, Kid.SolveDistanceJacobi, Kid.ApplyDeltas);
+
         buffers.BindCollisionCore(compute, Kid.SolveCollisionConstraints, Kid.ResetCollisionCounts,
             Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints);
 
         buffers.BindAttachments(compute, Kid.SetAttachmentPositions);
+
+        buffers.BindDeltasTo(compute, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.SolveParticleCollisionsNaive);
+
 
         // Cloth
         if (cloths.Count > 0)

@@ -1,4 +1,6 @@
-﻿#pragma kernel Predict
+﻿
+// Core XPBD Solver
+#pragma kernel Predict
 #pragma kernel Integrate
 #pragma kernel SolveDistanceJacobi
 #pragma kernel ApplyDeltas
@@ -12,6 +14,9 @@
 #pragma kernel BuildMeshConstraints
 #pragma kernel SolveCollisionConstraints
 #pragma kernel ResetCollisionCounts
+#pragma kernel SolveParticleCollisionsNaive
+
+//Attachment
 #pragma kernel SetAttachmentPositions
 
 
@@ -451,6 +456,64 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
     }
 
     particles[i] = p;
+}
+
+
+// ------------------ Naive Particle-Particle Collisions (O(N^2)) ------------------
+[numthreads(THREADS, 1, 1)]
+void SolveParticleCollisionsNaive(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+
+    Particle pi = particles[i];
+
+    if (pi.w == 0.0f)
+        return;
+
+    float ri = pi.radius;
+
+    for (uint j = i + 1; j < particleCount; j++)
+    {
+        Particle pj = particles[j];
+        
+        if (pj.w == 0.0f)
+            continue;
+
+        float rj = pj.radius;
+
+        float3 d = pi.positionX - pj.positionX;
+        float dist2 = dot(d, d);
+
+        float minDist = ri + rj + collisionMargin;
+        float minDist2 = minDist * minDist;
+        if (dist2 >= minDist2)
+            continue;
+
+        float dist = sqrt(max(dist2, 1e-12));
+        float3 n = (dist > 1e-6) ? (d / dist) : float3(1, 0, 0);
+        float penetration = minDist - dist;
+
+        float wi = pi.w;
+        float wj = pj.w;
+        float wt = wi + wj;
+        if (wt <= 0.0f)
+            continue;
+
+        float3 dxi = (wi / wt) * penetration * 0.5f * n; 
+        float3 dxj = -(wj / wt) * penetration * 0.5f * n;
+
+        ATOMIC_ADD_FLOAT_UAV(deltaX, i, dxi.x);
+        ATOMIC_ADD_FLOAT_UAV(deltaY, i, dxi.y);
+        ATOMIC_ADD_FLOAT_UAV(deltaZ, i, dxi.z);
+        InterlockedAdd(countBuf[i], 1);
+
+        ATOMIC_ADD_FLOAT_UAV(deltaX, j, dxj.x);
+        ATOMIC_ADD_FLOAT_UAV(deltaY, j, dxj.y);
+        ATOMIC_ADD_FLOAT_UAV(deltaZ, j, dxj.z);
+        InterlockedAdd(countBuf[j], 1);
+    }
 }
 
 

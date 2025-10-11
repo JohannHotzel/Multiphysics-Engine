@@ -153,16 +153,6 @@ public sealed class GpuXpbdBufferSet
     {
         if (ConstraintBuffer != null)
             cs.SetBuffer(solveDistanceKernel, Sid.Constraints, ConstraintBuffer);
-
-        cs.SetBuffer(solveDistanceKernel, Sid.DeltaX, DeltaXBuffer);
-        cs.SetBuffer(solveDistanceKernel, Sid.DeltaY, DeltaYBuffer);
-        cs.SetBuffer(solveDistanceKernel, Sid.DeltaZ, DeltaZBuffer);
-        cs.SetBuffer(solveDistanceKernel, Sid.CountBuf, CountBuffer);
-
-        cs.SetBuffer(applyDeltasKernel, Sid.DeltaX, DeltaXBuffer);
-        cs.SetBuffer(applyDeltasKernel, Sid.DeltaY, DeltaYBuffer);
-        cs.SetBuffer(applyDeltasKernel, Sid.DeltaZ, DeltaZBuffer);
-        cs.SetBuffer(applyDeltasKernel, Sid.CountBuf, CountBuffer);
     }
     public void BindCollisionCore(ComputeShader cs, int solveKernel, int resetKernel, params int[] buildKernels)
     {
@@ -192,7 +182,19 @@ public sealed class GpuXpbdBufferSet
             cs.SetInt(Sid.AttachmentConstraintCount, AttachmentConstraintCount);
         }
     }
+    public void BindDeltasTo(ComputeShader cs, params int[] kernels)
+    {
+        if (DeltaXBuffer == null || DeltaYBuffer == null || DeltaZBuffer == null || CountBuffer == null)
+            return;
 
+        foreach (var k in kernels)
+        {
+            cs.SetBuffer(k, Sid.DeltaX, DeltaXBuffer);
+            cs.SetBuffer(k, Sid.DeltaY, DeltaYBuffer);
+            cs.SetBuffer(k, Sid.DeltaZ, DeltaZBuffer);
+            cs.SetBuffer(k, Sid.CountBuf, CountBuffer);
+        }
+    }
 
     // -------- Collider Upload --------
     public void UploadSpheres(ComputeShader cs, int buildKernel, List<GpuSphereCollider> spheres)

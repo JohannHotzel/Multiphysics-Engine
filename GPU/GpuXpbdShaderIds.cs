@@ -18,9 +18,10 @@ public static class GpuXpbdShaderIds
         public static int BuildMeshConstraints;
 
         public static int SolveCollisionConstraints;
+        public static int SolveParticleCollisionsNaive;
         public static int ResetCollisionCounts;
         public static int BuildClothAabbs;
-
+        
         public static int SetAttachmentPositions;
 
         public static void Init(ComputeShader cs)
@@ -37,6 +38,7 @@ public static class GpuXpbdShaderIds
             BuildMeshConstraints = cs.FindKernel("BuildMeshConstraints");
 
             SolveCollisionConstraints = cs.FindKernel("SolveCollisionConstraints");
+            SolveParticleCollisionsNaive = cs.FindKernel("SolveParticleCollisionsNaive");
             ResetCollisionCounts = cs.FindKernel("ResetCollisionCounts");
             BuildClothAabbs = cs.FindKernel("BuildClothAabbs");
 
