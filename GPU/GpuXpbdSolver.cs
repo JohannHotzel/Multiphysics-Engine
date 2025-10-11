@@ -45,6 +45,13 @@ public class GpuXpbdSolver : MonoBehaviour
     private readonly List<GpuBoxCollider> _boxScratch = new();
     private readonly List<GpuTriangle> _meshTrisScratch = new();
     private readonly List<GpuMeshRange> _meshRangesScratch = new();
+
+    // Attachments
+    private readonly List<GpuAttachmentObject> _attachObjsCpu = new();
+    private readonly List<Transform> _attachObjRefs = new();
+    private readonly Dictionary<Transform, int> _objToIndex = new();
+    private readonly List<GpuAttachmentConstraint> _attachConsCpu = new();
+
     #endregion
 
 
@@ -62,6 +69,7 @@ public class GpuXpbdSolver : MonoBehaviour
         buffers = new GpuXpbdBufferSet();
 
         RegisterAllCloths();
+        BuildInitialAttachments();
         InitializeBuffers();
     }
 
@@ -87,15 +95,20 @@ public class GpuXpbdSolver : MonoBehaviour
 
         int groupsP = Mathf.CeilToInt(Mathf.Max(1, buffers.ParticleCount) / (float)THREADS);
         int groupsC = Mathf.CeilToInt(Mathf.Max(1, buffers.ConstraintCount) / (float)THREADS);
+        int groupsA = Mathf.CeilToInt(buffers.AttachmentConstraintCount / (float)THREADS);
 
         compute.Dispatch(Kid.Predict, groupsP, 1, 1);
         UpdateClothBoundsGPUGetData();
         GetBoundOverlaps();
         UpdateCollisionBuffers();
 
+        UpdateAttachmentObjects();
+
         for (int s = 0; s < substeps; s++)
         {
             compute.Dispatch(Kid.Integrate, groupsP, 1, 1);
+
+            if (buffers.AttachmentConstraintCount > 0) compute.Dispatch(Kid.SetAttachmentPositions, groupsA, 1, 1);
 
             if (buffers.ConstraintCount > 0)
             {
@@ -104,13 +117,13 @@ public class GpuXpbdSolver : MonoBehaviour
             }
 
             compute.Dispatch(Kid.ResetCollisionCounts, groupsP, 1, 1);
-
             if (buffers.SphereBuffer != null) compute.Dispatch(Kid.BuildSphereConstraints, groupsP, 1, 1);
             if (buffers.CapsuleBuffer != null) compute.Dispatch(Kid.BuildCapsuleConstraints, groupsP, 1, 1);
             if (buffers.BoxBuffer != null) compute.Dispatch(Kid.BuildBoxConstraints, groupsP, 1, 1);
             if (buffers.MeshTriangleBuffer != null) compute.Dispatch(Kid.BuildMeshConstraints, groupsP, 1, 1);
-
             compute.Dispatch(Kid.SolveCollisionConstraints, groupsP, 1, 1);
+
+
             compute.Dispatch(Kid.UpdateVelocities, groupsP, 1, 1);
         }
     }
@@ -151,12 +164,48 @@ public class GpuXpbdSolver : MonoBehaviour
             runningOffset += particles.Length;
         }
     }
+    private void BuildInitialAttachments()
+    {
+        _attachObjsCpu.Clear();
+        _attachObjRefs.Clear();
+        _objToIndex.Clear();
+        _attachConsCpu.Clear();
+
+        for (int i = 0; i < allParticlesList.Count; i++)
+        {
+            var p = allParticlesList[i];
+
+            if (!TryFindAttachmentForParticle(p.positionX, p.radius, out Transform tr, out Vector3 contactPoint))
+                continue;
+
+            // Make particle static 
+            p.w = 0f; 
+            allParticlesList[i] = p;
+
+            if (!_objToIndex.TryGetValue(tr, out int objIdx))
+            {
+                _objToIndex[tr] = objIdx = _attachObjsCpu.Count;
+                _attachObjRefs.Add(tr);
+                _attachObjsCpu.Add(new GpuAttachmentObject { world = tr.localToWorldMatrix });
+            }
+
+            _attachConsCpu.Add(new GpuAttachmentConstraint
+            {
+                particle = (uint)i,
+                objectIndex = (uint)objIdx,
+                localPoint = tr.InverseTransformPoint(contactPoint),
+            });
+        }
+    }
     private void InitializeBuffers()
     {
         buffers.ReleaseAll();
 
         var allParticles = allParticlesList.ToArray();
         var allConstraints = allConstraintsList.ToArray();
+
+        var attachObjs = _attachObjsCpu.Count > 0 ? _attachObjsCpu.ToArray() : null;
+        var attachCons = _attachConsCpu.Count > 0 ? _attachConsCpu.ToArray() : null;
 
         particleCount = allParticles.Length;
         constraintCount = allConstraints.Length;
@@ -168,19 +217,21 @@ public class GpuXpbdSolver : MonoBehaviour
         }
 
         // Core init
-        buffers.InitializeParticlesAndConstraints(allParticles, allConstraints, bufferGrowFactor);
+        buffers.InitializeParticlesAndConstraints(allParticles, allConstraints, attachObjs, attachCons, bufferGrowFactor);
         buffers.SetCountsOn(compute);
 
         // Bind particles, constraints, collisions
         buffers.BindParticlesTo(compute,
             Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities,
             Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints,
-            Kid.SolveCollisionConstraints
+            Kid.SolveCollisionConstraints, Kid.SetAttachmentPositions
         );
 
         buffers.BindDistanceSolve(compute, Kid.SolveDistanceJacobi, Kid.ApplyDeltas);
         buffers.BindCollisionCore(compute, Kid.SolveCollisionConstraints, Kid.ResetCollisionCounts,
             Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints);
+
+        buffers.BindAttachments(compute, Kid.SetAttachmentPositions);
 
         // Cloth
         if (cloths.Count > 0)
@@ -199,7 +250,8 @@ public class GpuXpbdSolver : MonoBehaviour
             _aabbCpu = new Aabb[cloths.Count];
         }
 
-        Debug.Log($"[GpuXpbdSolver] Registered: {particleCount} particles, {constraintCount} constraints.");
+
+        Debug.Log($"[GpuXpbdSolver] Registered: {particleCount} particles, {constraintCount} constraints, " + $"{buffers.AttachmentConstraintCount} attachments on {buffers.AttachmentObjectCount} objects.");
     }
     #endregion
 
@@ -279,6 +331,38 @@ public class GpuXpbdSolver : MonoBehaviour
 
 
     #region === Geometry Extract Helpers ===
+    private bool TryFindAttachmentForParticle(Vector3 particlePos, float particleRadius, out Transform tr, out Vector3 contactPoint)
+    {
+        tr = null;
+        contactPoint = Vector3.zero;
+
+        Collider[] hits = Physics.OverlapSphere(
+            particlePos,
+            particleRadius,
+            overlapLayerMask,
+            triggerInteraction
+        );
+
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        Collider first = hits[0];
+        if (first == null)
+            return false;
+
+        tr = first.transform;
+        contactPoint = particlePos;
+        return true;
+    }
+    private void UpdateAttachmentObjects()
+    {
+        if (buffers.AttachmentObjectCount == 0) return;
+        for (int i = 0; i < _attachObjRefs.Count; i++)
+            _attachObjsCpu[i] = new GpuAttachmentObject { world = _attachObjRefs[i].localToWorldMatrix };
+
+        buffers.AttachmentObjectsBuffer.SetData(_attachObjsCpu);
+    }
+
     private static void ExtractCapsule(CapsuleCollider cc, out Vector3 p0, out Vector3 p1, out float rWorld)
     {
         var t = cc.transform;

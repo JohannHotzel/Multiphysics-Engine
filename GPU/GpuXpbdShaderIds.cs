@@ -21,6 +21,8 @@ public static class GpuXpbdShaderIds
         public static int ResetCollisionCounts;
         public static int BuildClothAabbs;
 
+        public static int SetAttachmentPositions;
+
         public static void Init(ComputeShader cs)
         {
             Predict = cs.FindKernel("Predict");
@@ -37,14 +39,19 @@ public static class GpuXpbdShaderIds
             SolveCollisionConstraints = cs.FindKernel("SolveCollisionConstraints");
             ResetCollisionCounts = cs.FindKernel("ResetCollisionCounts");
             BuildClothAabbs = cs.FindKernel("BuildClothAabbs");
+
+            SetAttachmentPositions = cs.FindKernel("SetAttachmentPositions");
         }
     }
 
     public static class Sid
     {
+        // Particles
         public static readonly int Particles = Shader.PropertyToID("particles");
         public static readonly int ParticleCount = Shader.PropertyToID("particleCount");
 
+
+        // Distance constraints
         public static readonly int Constraints = Shader.PropertyToID("constraints");
         public static readonly int ConstraintCount = Shader.PropertyToID("constraintCount");
 
@@ -52,6 +59,7 @@ public static class GpuXpbdShaderIds
         public static readonly int DeltaY = Shader.PropertyToID("deltaY");
         public static readonly int DeltaZ = Shader.PropertyToID("deltaZ");
         public static readonly int CountBuf = Shader.PropertyToID("countBuf");
+
 
         // Colliders / Cloth
         public static readonly int ClothRanges = Shader.PropertyToID("clothRanges");
@@ -70,6 +78,14 @@ public static class GpuXpbdShaderIds
         public static readonly int MeshRanges = Shader.PropertyToID("meshRanges");
         public static readonly int MeshCount = Shader.PropertyToID("meshCount");
         public static readonly int TriangleCount = Shader.PropertyToID("triangleCount");
+
+
+        // Attachment Constraints
+        public static readonly int AttachmentObjects = Shader.PropertyToID("attachmentObjects");
+        public static readonly int AttachmentObjectCount = Shader.PropertyToID("attachmentObjectCount");
+        public static readonly int AttachmentConstraints = Shader.PropertyToID("attachmentConstraints");
+        public static readonly int AttachmentConstraintCount = Shader.PropertyToID("attachmentConstraintCount");
+
 
         // Params
         public static readonly int Omega = Shader.PropertyToID("omega");

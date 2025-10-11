@@ -7,6 +7,8 @@ public sealed class GpuXpbdBufferSet
     // ---- Public Readonly API ----
     public int ParticleCount { get; private set; }
     public int ConstraintCount { get; private set; }
+    public int AttachmentObjectCount { get; private set; }
+    public int AttachmentConstraintCount { get; private set; }
 
     // ---- Core Buffers ----
     public ComputeBuffer ParticleBuffer;
@@ -18,6 +20,9 @@ public sealed class GpuXpbdBufferSet
     public ComputeBuffer SphereBuffer, CapsuleBuffer, BoxBuffer;
     public ComputeBuffer MeshTriangleBuffer, MeshRangeBuffer;
 
+    // ---- Attachment Buffers ----
+    public ComputeBuffer AttachmentObjectsBuffer, AttachmentConstraintsBuffer; 
+
     // ---- Cloth/Broadphase ----
     public ComputeBuffer ClothRangesBuffer, ClothAabbsBuffer;
 
@@ -27,7 +32,7 @@ public sealed class GpuXpbdBufferSet
 
 
     // -------- Init / Teardown --------
-    public void InitializeParticlesAndConstraints(GpuParticle[] particles, GpuDistanceConstraint[] constraints, float growFactor = 1.5f)
+    public void InitializeParticlesAndConstraints(GpuParticle[] particles, GpuDistanceConstraint[] constraints, GpuAttachmentObject[] attachObjs, GpuAttachmentConstraint[] attachCons, float growFactor = 1.5f)
     {
         ParticleCount = particles?.Length ?? 0;
         ConstraintCount = constraints?.Length ?? 0;
@@ -58,6 +63,23 @@ public sealed class GpuXpbdBufferSet
         Ensure(ref CollisionConstraintBuffer, colCap, GpuCollisionConstraint.Stride);
         Ensure(ref CollisionCountBuffer, ParticleCount, sizeof(uint));
         ZeroUInt(ref CollisionCountBuffer, ParticleCount);
+
+        // Attachments
+        AttachmentObjectCount = attachObjs?.Length ?? 0;
+        AttachmentConstraintCount = attachCons?.Length ?? 0;
+
+        if (AttachmentObjectCount > 0)
+        {
+            Ensure(ref AttachmentObjectsBuffer, AttachmentObjectCount, GpuAttachmentObject.Stride, ComputeBufferType.Structured, growFactor);
+            AttachmentObjectsBuffer.SetData(attachObjs);
+        }
+        if (AttachmentConstraintCount > 0)
+        {
+            Ensure(ref AttachmentConstraintsBuffer, AttachmentConstraintCount, GpuAttachmentConstraint.Stride, ComputeBufferType.Structured, growFactor);
+            AttachmentConstraintsBuffer.SetData(attachCons);
+        }
+
+
     }
     public void InitializeCloth(ClothRange[] ranges, ComputeShader cs, int buildClothAabbsKernel)
     {
@@ -91,6 +113,13 @@ public sealed class GpuXpbdBufferSet
 
         Release(ref ClothRangesBuffer);
         Release(ref ClothAabbsBuffer);
+
+        Release(ref AttachmentObjectsBuffer);
+        Release(ref AttachmentConstraintsBuffer);
+
+
+        AttachmentObjectCount = 0;
+        AttachmentConstraintCount = 0;
 
         ParticleCount = 0;
         ConstraintCount = 0;
@@ -145,6 +174,23 @@ public sealed class GpuXpbdBufferSet
         cs.SetBuffer(solveKernel, Sid.CollisionConstraints, CollisionConstraintBuffer);
         cs.SetBuffer(solveKernel, Sid.CollisionCounts, CollisionCountBuffer);
         cs.SetBuffer(resetKernel, Sid.CollisionCounts, CollisionCountBuffer);
+    }
+    public void BindAttachments(ComputeShader cs, params int[] kernels)
+    {
+        if (AttachmentConstraintCount <= 0) return;
+
+        foreach (var k in kernels)
+        {
+            if (AttachmentObjectsBuffer != null)
+                cs.SetBuffer(k, Sid.AttachmentObjects, AttachmentObjectsBuffer);
+
+            cs.SetInt(Sid.AttachmentObjectCount, AttachmentObjectCount);
+
+            if (AttachmentConstraintsBuffer != null)
+                cs.SetBuffer(k, Sid.AttachmentConstraints, AttachmentConstraintsBuffer);
+
+            cs.SetInt(Sid.AttachmentConstraintCount, AttachmentConstraintCount);
+        }
     }
 
 
@@ -222,16 +268,6 @@ public sealed class GpuXpbdBufferSet
             return;
         buf.Release();
         buf = null;
-    }
-    public static void ReleaseAll(params ComputeBuffer[] buffers)
-    {
-        if (buffers == null)
-            return;
-        foreach (var b in buffers)
-        {
-            if (b != null)
-                b.Release();
-        }
     }
     public static void ZeroUInt(ref ComputeBuffer buffer, int count)
     {

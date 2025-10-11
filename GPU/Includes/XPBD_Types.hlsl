@@ -83,4 +83,19 @@ struct MeshRange
 	uint count;
 };
 
+
+// === Attachments ===
+struct AttachmentObject
+{
+	float4x4 world;
+};
+
+struct AttachmentConstraint
+{
+    uint particle;
+    uint objectIndex;
+    float3 localPoint;
+};
+
+
 #endif

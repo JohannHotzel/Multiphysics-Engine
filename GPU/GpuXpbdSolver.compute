@@ -6,14 +6,13 @@
 
 //Collsion
 #pragma kernel BuildClothAabbs
-
 #pragma kernel BuildSphereConstraints
 #pragma kernel BuildCapsuleConstraints
 #pragma kernel BuildBoxConstraints
 #pragma kernel BuildMeshConstraints
-
 #pragma kernel SolveCollisionConstraints
 #pragma kernel ResetCollisionCounts
+#pragma kernel SetAttachmentPositions
 
 
 #pragma target 5.0
@@ -50,6 +49,13 @@ RWStructuredBuffer<uint> countBuf;
 
 RWStructuredBuffer<CollisionConstraint> collisionConstraints;
 RWStructuredBuffer<uint> collisionCounts;
+
+
+StructuredBuffer<AttachmentObject> attachmentObjects;
+int attachmentObjectCount;
+
+StructuredBuffer<AttachmentConstraint> attachmentConstraints;
+int attachmentConstraintCount;
 
 
 float dt, dts, dts2;
@@ -448,6 +454,31 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
 }
 
 
+// ------------------ SolveAttachmentConstraints (per constraint) ------------------
+[numthreads(THREADS, 1, 1)]
+void SetAttachmentPositions(uint3 tid : SV_DispatchThreadID)
+{
+    uint c = tid.x;
+    if (c >= attachmentConstraintCount)
+        return;
+
+    AttachmentConstraint ac = attachmentConstraints[c];
+    if (ac.particle >= particleCount)
+        return;
+
+    uint i = ac.particle;
+
+    float3 target = mul(attachmentObjects[ac.objectIndex].world, float4(ac.localPoint, 1)).xyz;
+
+    Particle p = particles[i];
+    p.positionX = target;
+    p.positionP = target;
+    p.positionPredicted = target;
+
+    particles[i] = p;
+}
+
+
 // ------------------ Reset Collision Counts ------------------
 [numthreads(THREADS, 1, 1)]
 void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
@@ -458,4 +489,6 @@ void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
     
     collisionCounts[i] = 0;
 }
+
+
 

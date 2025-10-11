@@ -25,3 +25,18 @@ public struct GpuCollisionConstraint
 
     public const int Stride = (3 + 3 + 1) * sizeof(float); // 28
 }
+
+
+public struct GpuAttachmentObject
+{
+    public Matrix4x4 world;             // Transform.localToWorldMatrix
+    public const int Stride = 64;
+}
+
+public struct GpuAttachmentConstraint
+{
+    public uint particle;                
+    public uint objectIndex;             
+    public Vector3 localPoint;          
+    public const int Stride = sizeof(uint) * 2 + sizeof(float) * 3; // 8 + 12 = 20
+}

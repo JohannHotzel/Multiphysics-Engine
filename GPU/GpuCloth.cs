@@ -13,9 +13,9 @@ public class GpuCloth : MonoBehaviour
     public bool useStructural = true;
     public bool useShear = true;
     public bool useFlexion = true;
-    [Range(0f, 1f)] public float structuralCompliance = 0f;
-    [Range(0f, 1f)] public float shearCompliance = 0f;
-    [Range(0f, 1f)] public float flexionCompliance = 0f;
+    public float structuralCompliance = 0f;
+    public float shearCompliance = 0f;
+    public float flexionCompliance = 0f;
 
     [Header("Pinning")]
     public bool pinTopRow = true;
