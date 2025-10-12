@@ -1,0 +1,190 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using UnityEngine;
+
+
+public class Vertex
+{
+    public readonly int Index;
+
+    public Particle Particle;
+
+    private Vector3 Position; 
+
+    public List<Edge> IncidentEdges = new List<Edge>();
+    public List<Triangle> IncidentTriangles = new List<Triangle>();
+
+    public Vertex(Vector3 pos, int idx)
+    {
+        Position = pos;
+        Index = idx;
+    }
+}
+
+public class Edge
+{
+    public Vertex V0, V1;
+    public Triangle T0, T1;               
+
+    public Edge(Vertex v0, Vertex v1)
+    {
+        V0 = v0; V1 = v1;
+        v0.IncidentEdges.Add(this);
+        v1.IncidentEdges.Add(this);
+    }
+
+    public List<Vertex> GetAdjacentQuadVertices()
+    {
+        if (T0 == null || T1 == null)
+            return null;
+
+        Vertex GetOpposite(Triangle t)
+        {
+            if (t.A != V0 && t.A != V1) return t.A;
+            if (t.B != V0 && t.B != V1) return t.B;
+            return t.C;
+        }
+
+        var opp0 = GetOpposite(T0);
+        var opp1 = GetOpposite(T1);
+
+        return new List<Vertex> { V0, V1, opp0, opp1 };
+    }
+
+    public Vertex Other(Vertex v) => v == V0 ? V1 : V0;
+    public Triangle Other(Triangle t) => t == T0 ? T1 : T0;
+}
+
+public class Triangle
+{
+    public Vertex A, B, C;
+    public Edge E0, E1, E2;
+
+    public Triangle(Vertex a, Vertex b, Vertex c, Edge e0, Edge e1, Edge e2)
+    {
+        A = a; B = b; C = c;
+        E0 = e0; E1 = e1; E2 = e2;
+
+        a.IncidentTriangles.Add(this);
+        b.IncidentTriangles.Add(this);
+        c.IncidentTriangles.Add(this);
+
+        if (e0.T0 == null) e0.T0 = this; else e0.T1 = this;
+        if (e1.T0 == null) e1.T0 = this; else e1.T1 = this;
+        if (e2.T0 == null) e2.T0 = this; else e2.T1 = this;
+    }
+
+    public IEnumerable<Triangle> AdjacentTriangles()
+    {
+        if (E0.Other(this) != null) yield return E0.Other(this);
+        if (E1.Other(this) != null) yield return E1.Other(this);
+        if (E2.Other(this) != null) yield return E2.Other(this);
+    }
+}
+
+
+
+public class MeshGeometry
+{
+    public Transform transform;
+    public readonly List<Vertex> vertices = new List<Vertex>();
+    public readonly List<Edge> edges = new List<Edge>();
+    public readonly List<Triangle> triangles = new List<Triangle>();
+
+    public readonly Dictionary<(int, int), Edge> edgeMap = new Dictionary<(int, int), Edge>();
+    private readonly Dictionary<(Particle, Particle), Edge> particleEdgeMap = new Dictionary<(Particle, Particle), Edge>();
+
+    private static (Particle, Particle) ParticleKey(Particle a, Particle b)
+    {
+        return RuntimeHelpers.GetHashCode(a) < RuntimeHelpers.GetHashCode(b) ? (a, b) : (b, a);
+    }
+
+    public Vertex AddVertex(Vector3 pos)
+    {
+        var v = new Vertex(pos, vertices.Count);
+        vertices.Add(v);
+        return v;
+    }
+
+    public Edge GetOrCreateEdge(Vertex a, Vertex b)
+    {
+        var key = a.Index < b.Index ? (a.Index, b.Index) : (b.Index, a.Index);
+
+        if (edgeMap.TryGetValue(key, out var edge))
+            return edge;
+
+        edge = new Edge(a, b);
+        edges.Add(edge);
+        edgeMap[key] = edge;
+
+        if (a.Particle != null && b.Particle != null)
+            particleEdgeMap[ParticleKey(a.Particle, b.Particle)] = edge;
+
+        return edge;
+    }
+    public Edge GetEdge(Particle pA, Particle pB)
+    {
+        particleEdgeMap.TryGetValue(ParticleKey(pA, pB), out var edge);
+        return edge;
+    }
+
+    public Triangle AddTriangle(Vertex a, Vertex b, Vertex c)
+    {
+        var e0 = GetOrCreateEdge(a, b);
+        var e1 = GetOrCreateEdge(b, c);
+        var e2 = GetOrCreateEdge(c, a);
+
+        var tri = new Triangle(a, b, c, e0, e1, e2);
+        triangles.Add(tri);
+        return tri;
+    }
+
+    public Mesh BuildUnityMesh()
+    {
+        var mesh = new Mesh { name = "ProceduralMesh" };
+
+        mesh.vertices = vertices.ConvertAll(v => transform.InverseTransformPoint(v.Particle.positionX)).ToArray();
+
+        var indices = new int[triangles.Count * 3];
+        for (int i = 0; i < triangles.Count; i++)
+        {
+            var t = triangles[i];
+            indices[3 * i + 0] = t.A.Index;
+            indices[3 * i + 1] = t.B.Index;
+            indices[3 * i + 2] = t.C.Index;
+        }
+        mesh.triangles = indices;
+
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        return mesh;
+    }
+
+    public Mesh BuildUnityMesh(ICollection<Edge> tornEdges)
+    {
+        var mesh = new Mesh { name = "ProceduralMesh" };
+
+        mesh.vertices = vertices.ConvertAll(v => transform.InverseTransformPoint(v.Particle.positionX)).ToArray();
+
+        var indexList = new List<int>(triangles.Count * 3);
+        foreach (var t in triangles)
+        {
+            if (tornEdges.Contains(t.E0) ||
+                tornEdges.Contains(t.E1) ||
+                tornEdges.Contains(t.E2))
+                continue;
+
+            indexList.Add(t.A.Index);
+            indexList.Add(t.B.Index);
+            indexList.Add(t.C.Index);
+        }
+        mesh.triangles = indexList.ToArray();
+
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        return mesh;
+    }
+}

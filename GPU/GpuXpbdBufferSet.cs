@@ -104,7 +104,7 @@ public sealed class GpuXpbdBufferSet
         if (particleCount <= 0) return;
 
         HashSpacing = 2f * particleRadius;
-        HashTableSize = Mathf.NextPowerOfTwo(Mathf.Max(8, 2 * particleCount));
+        HashTableSize = Mathf.NextPowerOfTwo((int)(particleCount * 1.5f));
 
         Ensure(ref HashCellStarts, HashTableSize + 1, sizeof(uint));
         Ensure(ref HashCellEntries, particleCount, sizeof(uint));
