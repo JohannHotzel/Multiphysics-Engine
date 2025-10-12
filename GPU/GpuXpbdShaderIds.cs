@@ -18,11 +18,15 @@ public static class GpuXpbdShaderIds
         public static int BuildMeshConstraints;
 
         public static int SolveCollisionConstraints;
-        public static int SolveParticleCollisionsNaive;
         public static int ResetCollisionCounts;
         public static int BuildClothAabbs;
         
         public static int SetAttachmentPositions;
+
+        public static int HashClearCounts;
+        public static int HashCountCells;
+        public static int HashFillEntries;
+        public static int SolveParticleCollisionsHashed;
 
         public static void Init(ComputeShader cs)
         {
@@ -38,11 +42,15 @@ public static class GpuXpbdShaderIds
             BuildMeshConstraints = cs.FindKernel("BuildMeshConstraints");
 
             SolveCollisionConstraints = cs.FindKernel("SolveCollisionConstraints");
-            SolveParticleCollisionsNaive = cs.FindKernel("SolveParticleCollisionsNaive");
             ResetCollisionCounts = cs.FindKernel("ResetCollisionCounts");
             BuildClothAabbs = cs.FindKernel("BuildClothAabbs");
 
             SetAttachmentPositions = cs.FindKernel("SetAttachmentPositions");
+
+            HashClearCounts = cs.FindKernel("HashClearCounts");
+            HashCountCells = cs.FindKernel("HashCountCells");
+            HashFillEntries = cs.FindKernel("HashFillEntries");
+            SolveParticleCollisionsHashed = cs.FindKernel("SolveParticleCollisionsHashed");
         }
     }
 
@@ -87,6 +95,13 @@ public static class GpuXpbdShaderIds
         public static readonly int AttachmentObjectCount = Shader.PropertyToID("attachmentObjectCount");
         public static readonly int AttachmentConstraints = Shader.PropertyToID("attachmentConstraints");
         public static readonly int AttachmentConstraintCount = Shader.PropertyToID("attachmentConstraintCount");
+
+
+        // Spatial Hash
+        public static readonly int HashCellStarts = Shader.PropertyToID("hashCellStarts");
+        public static readonly int HashCellEntries = Shader.PropertyToID("hashCellEntries");
+        public static readonly int HashTableSize = Shader.PropertyToID("hashTableSize");
+        public static readonly int HashSpacing = Shader.PropertyToID("hashSpacing");
 
 
         // Params

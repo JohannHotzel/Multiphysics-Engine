@@ -20,6 +20,11 @@ public sealed class GpuXpbdBufferSet
     public ComputeBuffer SphereBuffer, CapsuleBuffer, BoxBuffer;
     public ComputeBuffer MeshTriangleBuffer, MeshRangeBuffer;
 
+    // --- Spacial Hashing Buffers ---
+    public ComputeBuffer HashCellStarts, HashCellEntries;
+    public int HashTableSize;
+    public float HashSpacing;
+
     // ---- Attachment Buffers ----
     public ComputeBuffer AttachmentObjectsBuffer, AttachmentConstraintsBuffer; 
 
@@ -94,6 +99,19 @@ public sealed class GpuXpbdBufferSet
         cs.SetBuffer(buildClothAabbsKernel, Sid.ClothRanges, ClothRangesBuffer);
         cs.SetBuffer(buildClothAabbsKernel, Sid.ClothAabbs, ClothAabbsBuffer);
     }
+    public void InitializeHash(ComputeShader cs, int particleCount, float particleRadius, float growFactor = 1.5f)
+    {
+        if (particleCount <= 0) return;
+
+        HashSpacing = 2f * particleRadius;
+        HashTableSize = Mathf.NextPowerOfTwo(Mathf.Max(8, 2 * particleCount));
+
+        Ensure(ref HashCellStarts, HashTableSize + 1, sizeof(uint));
+        Ensure(ref HashCellEntries, particleCount, sizeof(uint));
+
+        cs.SetInt(Sid.HashTableSize, HashTableSize);
+        cs.SetFloat(Sid.HashSpacing, HashSpacing);
+    }
     public void ReleaseAll()
     {
         Release(ref ParticleBuffer);
@@ -116,6 +134,9 @@ public sealed class GpuXpbdBufferSet
 
         Release(ref AttachmentObjectsBuffer);
         Release(ref AttachmentConstraintsBuffer);
+
+        Release(ref HashCellStarts);
+        Release(ref HashCellEntries);
 
 
         AttachmentObjectCount = 0;
@@ -195,6 +216,17 @@ public sealed class GpuXpbdBufferSet
             cs.SetBuffer(k, Sid.CountBuf, CountBuffer);
         }
     }
+    public void BindHashTo(ComputeShader cs, params int[] kernels)
+    {
+        if (HashCellStarts == null || HashCellEntries == null) return;
+
+        foreach (var k in kernels)
+        {
+            cs.SetBuffer(k, GpuXpbdShaderIds.Sid.HashCellStarts, HashCellStarts);
+            cs.SetBuffer(k, GpuXpbdShaderIds.Sid.HashCellEntries, HashCellEntries);
+        }
+    }
+
 
     // -------- Collider Upload --------
     public void UploadSpheres(ComputeShader cs, int buildKernel, List<GpuSphereCollider> spheres)

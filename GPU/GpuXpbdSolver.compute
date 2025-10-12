@@ -6,7 +6,7 @@
 #pragma kernel ApplyDeltas
 #pragma kernel UpdateVelocities
 
-//Collsion
+// Collsion
 #pragma kernel BuildClothAabbs
 #pragma kernel BuildSphereConstraints
 #pragma kernel BuildCapsuleConstraints
@@ -14,10 +14,15 @@
 #pragma kernel BuildMeshConstraints
 #pragma kernel SolveCollisionConstraints
 #pragma kernel ResetCollisionCounts
-#pragma kernel SolveParticleCollisionsNaive
 
-//Attachment
+// Attachment
 #pragma kernel SetAttachmentPositions
+
+// Spacial Hashing
+#pragma kernel HashClearCounts
+#pragma kernel HashCountCells
+#pragma kernel HashFillEntries
+#pragma kernel SolveParticleCollisionsHashed
 
 
 #pragma target 5.0
@@ -61,6 +66,12 @@ int attachmentObjectCount;
 
 StructuredBuffer<AttachmentConstraint> attachmentConstraints;
 int attachmentConstraintCount;
+
+RWStructuredBuffer<uint> hashCellStarts; // size: hashTableSize + 1
+RWStructuredBuffer<uint> hashCellEntries; // size: >= particleCount
+int hashTableSize;
+float hashSpacing;
+
 
 
 float dt, dts, dts2;
@@ -459,64 +470,6 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
 }
 
 
-// ------------------ Naive Particle-Particle Collisions (O(N^2)) ------------------
-[numthreads(THREADS, 1, 1)]
-void SolveParticleCollisionsNaive(uint3 id : SV_DispatchThreadID)
-{
-    uint i = id.x;
-    if (i >= particleCount)
-        return;
-
-    Particle pi = particles[i];
-
-    if (pi.w == 0.0f)
-        return;
-
-    float ri = pi.radius;
-
-    for (uint j = i + 1; j < particleCount; j++)
-    {
-        Particle pj = particles[j];
-        
-        if (pj.w == 0.0f)
-            continue;
-
-        float rj = pj.radius;
-
-        float3 d = pi.positionX - pj.positionX;
-        float dist2 = dot(d, d);
-
-        float minDist = ri + rj + collisionMargin;
-        float minDist2 = minDist * minDist;
-        if (dist2 >= minDist2)
-            continue;
-
-        float dist = sqrt(max(dist2, 1e-12));
-        float3 n = (dist > 1e-6) ? (d / dist) : float3(1, 0, 0);
-        float penetration = minDist - dist;
-
-        float wi = pi.w;
-        float wj = pj.w;
-        float wt = wi + wj;
-        if (wt <= 0.0f)
-            continue;
-
-        float3 dxi = (wi / wt) * penetration * 0.5f * n; 
-        float3 dxj = -(wj / wt) * penetration * 0.5f * n;
-
-        ATOMIC_ADD_FLOAT_UAV(deltaX, i, dxi.x);
-        ATOMIC_ADD_FLOAT_UAV(deltaY, i, dxi.y);
-        ATOMIC_ADD_FLOAT_UAV(deltaZ, i, dxi.z);
-        InterlockedAdd(countBuf[i], 1);
-
-        ATOMIC_ADD_FLOAT_UAV(deltaX, j, dxj.x);
-        ATOMIC_ADD_FLOAT_UAV(deltaY, j, dxj.y);
-        ATOMIC_ADD_FLOAT_UAV(deltaZ, j, dxj.z);
-        InterlockedAdd(countBuf[j], 1);
-    }
-}
-
-
 // ------------------ SolveAttachmentConstraints (per constraint) ------------------
 [numthreads(THREADS, 1, 1)]
 void SetAttachmentPositions(uint3 tid : SV_DispatchThreadID)
@@ -554,4 +507,123 @@ void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
 }
 
 
+// ------------------ Spacial Hashing -------------------
+int3 HashGridCoord(float3 p, float spacing)
+{
+    return (int3) floor(p / spacing);
+}
+
+uint HashHashCoord(int3 c, uint tableSize)
+{
+    int h = (c.x * 92837111) ^ (c.y * 689287499) ^ (c.z * 283923481);
+    if (h < 0)
+        h = -h;
+    return (uint) (h % (int) tableSize);
+}
+
+[numthreads(THREADS, 1, 1)]
+void HashClearCounts(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i <= hashTableSize)
+    {
+        hashCellStarts[i] = 0;
+    }
+}
+
+[numthreads(THREADS, 1, 1)]
+void HashCountCells(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+    
+    float3 p = particles[i].positionX;
+    int3 gc = HashGridCoord(p, hashSpacing);
+    uint h = HashHashCoord(gc, hashTableSize);
+    InterlockedAdd(hashCellStarts[h], 1);
+}
+
+[numthreads(THREADS, 1, 1)]
+void HashFillEntries(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+    
+    float3 p = particles[i].positionX;
+    int3 gc = HashGridCoord(p, hashSpacing);
+    uint h = HashHashCoord(gc, hashTableSize);
+    uint oldEnd;
+    InterlockedAdd(hashCellStarts[h], (uint) (-1), oldEnd);
+    hashCellEntries[oldEnd - 1] = i;
+}
+
+[numthreads(THREADS, 1, 1)]
+void SolveParticleCollisionsHashed(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    
+    if (i >= particleCount)
+        return;
+    
+    Particle pi = particles[i];
+    
+    if (pi.w == 0.0f)
+        return;
+
+    float3 xi = pi.positionX;
+    float ri = pi.radius;
+    int3 gc = HashGridCoord(xi, hashSpacing);
+
+
+    for (int dx = -1; dx <= 1; ++dx)
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dz = -1; dz <= 1; ++dz)
+            {
+                uint h = HashHashCoord(gc + int3(dx, dy, dz), hashTableSize);
+                uint start = hashCellStarts[h];
+                uint end = hashCellStarts[h + 1];
+
+                for (uint k = start; k < end; ++k)
+                {
+                    uint j = hashCellEntries[k];
+                    
+                    if (j <= i)
+                        continue;
+                    
+                    Particle pj = particles[j];
+                    
+                    if (pj.w == 0.0f)
+                        continue;
+
+                    float3 d = xi - pj.positionX;
+                    float dist2 = dot(d, d);
+                    float minDist = ri + pj.radius + collisionMargin;
+                    float minDist2 = minDist * minDist;
+                    if (dist2 >= minDist2)
+                        continue;
+
+                    float dist = sqrt(max(dist2, 1e-12));
+                    float3 n = (dist > 1e-6) ? (d / dist) : float3(1, 0, 0);
+                    float pen = minDist - dist;
+
+                    float wi = pi.w, wj = pj.w, wt = wi + wj;
+                    if (wt <= 0)
+                        continue;
+                    float3 dxi = (wi / wt) * pen * 0.5f * n;
+                    float3 dxj = -(wj / wt) * pen * 0.5f * n;
+
+                    ATOMIC_ADD_FLOAT_UAV(deltaX, i, dxi.x);
+                    ATOMIC_ADD_FLOAT_UAV(deltaY, i, dxi.y);
+                    ATOMIC_ADD_FLOAT_UAV(deltaZ, i, dxi.z);
+                    InterlockedAdd(countBuf[i], 1);
+
+                    ATOMIC_ADD_FLOAT_UAV(deltaX, j, dxj.x);
+                    ATOMIC_ADD_FLOAT_UAV(deltaY, j, dxj.y);
+                    ATOMIC_ADD_FLOAT_UAV(deltaZ, j, dxj.z);
+                    InterlockedAdd(countBuf[j], 1);
+                }
+            }
+}
 

@@ -102,8 +102,11 @@ public class GpuXpbdSolver : MonoBehaviour
         UpdateClothBoundsGPUGetData();
         GetBoundOverlaps();
         UpdateCollisionBuffers();
-
+        
         UpdateAttachmentObjects();
+
+        if(enableParticleParticleCollision)
+            RebuildSpatialHash();
 
         for (int s = 0; s < substeps; s++)
         {
@@ -119,7 +122,7 @@ public class GpuXpbdSolver : MonoBehaviour
 
             if (enableParticleParticleCollision)
             {
-                compute.Dispatch(Kid.SolveParticleCollisionsNaive, groupsP, 1, 1);
+                compute.Dispatch(Kid.SolveParticleCollisionsHashed, groupsP, 1, 1);
                 compute.Dispatch(Kid.ApplyDeltas, groupsP, 1, 1);
             }
 
@@ -226,21 +229,23 @@ public class GpuXpbdSolver : MonoBehaviour
         buffers.InitializeParticlesAndConstraints(allParticles, allConstraints, attachObjs, attachCons, bufferGrowFactor);
         buffers.SetCountsOn(compute);
 
-        // Bind particles, constraints, collisions
+
         buffers.BindParticlesTo(compute,
             Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities,
             Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints,
-            Kid.SolveCollisionConstraints, Kid.SetAttachmentPositions, Kid.SolveParticleCollisionsNaive
+            Kid.SolveCollisionConstraints, Kid.SetAttachmentPositions, Kid.HashCountCells, Kid.HashFillEntries, Kid.SolveParticleCollisionsHashed
         );
 
         buffers.BindDistanceSolve(compute, Kid.SolveDistanceJacobi, Kid.ApplyDeltas);
 
-        buffers.BindCollisionCore(compute, Kid.SolveCollisionConstraints, Kid.ResetCollisionCounts,
-            Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints);
+        buffers.BindCollisionCore(compute, Kid.SolveCollisionConstraints, Kid.ResetCollisionCounts, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints);
 
         buffers.BindAttachments(compute, Kid.SetAttachmentPositions);
 
-        buffers.BindDeltasTo(compute, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.SolveParticleCollisionsNaive);
+        buffers.BindDeltasTo(compute, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.SolveParticleCollisionsHashed);
+
+        buffers.InitializeHash(compute, particleCount, particleRadiusSim, bufferGrowFactor);
+        buffers.BindHashTo(compute, Kid.HashClearCounts, Kid.HashCountCells, Kid.HashFillEntries, Kid.SolveParticleCollisionsHashed);
 
 
         // Cloth
@@ -339,8 +344,35 @@ public class GpuXpbdSolver : MonoBehaviour
     }
     #endregion
 
+    private void RebuildSpatialHash()
+    {
+        if (buffers == null || buffers.ParticleCount <= 0) return;
 
-    #region === Geometry Extract Helpers ===
+        int groupsH = Mathf.CeilToInt( (buffers.HashTableSize + 1) / (float)THREADS);
+        int groupsP = Mathf.CeilToInt(buffers.ParticleCount / (float)THREADS);
+
+        compute.Dispatch(Kid.HashClearCounts, groupsH, 1, 1);
+        compute.Dispatch(Kid.HashCountCells, groupsP, 1, 1);
+
+
+        var ends = new uint[buffers.HashTableSize + 1];
+        buffers.HashCellStarts.GetData(ends, 0, 0, buffers.HashTableSize);
+
+        uint running = 0;
+        for (int h = 0; h < buffers.HashTableSize; h++)
+        {
+            running += ends[h];
+            ends[h] = running; 
+        }
+        ends[buffers.HashTableSize] = running;
+
+        buffers.HashCellStarts.SetData(ends);
+
+        compute.Dispatch(Kid.HashFillEntries, groupsP, 1, 1);
+    }
+
+
+    #region == Attachment Helpers ===
     private bool TryFindAttachmentForParticle(Vector3 particlePos, float particleRadius, out Transform tr, out Vector3 contactPoint)
     {
         tr = null;
@@ -372,7 +404,9 @@ public class GpuXpbdSolver : MonoBehaviour
 
         buffers.AttachmentObjectsBuffer.SetData(_attachObjsCpu);
     }
+    #endregion
 
+    #region === Geometry Extract Helpers ===
     private static void ExtractCapsule(CapsuleCollider cc, out Vector3 p0, out Vector3 p1, out float rWorld)
     {
         var t = cc.transform;
