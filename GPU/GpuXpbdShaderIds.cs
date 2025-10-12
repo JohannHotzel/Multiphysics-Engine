@@ -87,7 +87,6 @@ public static class GpuXpbdShaderIds
         public static readonly int MeshTriangles = Shader.PropertyToID("meshTriangles");
         public static readonly int MeshRanges = Shader.PropertyToID("meshRanges");
         public static readonly int MeshCount = Shader.PropertyToID("meshCount");
-        public static readonly int TriangleCount = Shader.PropertyToID("triangleCount");
 
 
         // Attachment Constraints

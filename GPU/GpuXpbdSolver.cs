@@ -236,7 +236,7 @@ public class GpuXpbdSolver : MonoBehaviour
             Kid.SolveCollisionConstraints, Kid.SetAttachmentPositions, Kid.HashCountCells, Kid.HashFillEntries, Kid.SolveParticleCollisionsHashed
         );
 
-        buffers.BindDistanceSolve(compute, Kid.SolveDistanceJacobi, Kid.ApplyDeltas);
+        buffers.BindDistanceSolve(compute, Kid.SolveDistanceJacobi);
 
         buffers.BindCollisionCore(compute, Kid.SolveCollisionConstraints, Kid.ResetCollisionCounts, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints);
 
@@ -271,7 +271,7 @@ public class GpuXpbdSolver : MonoBehaviour
     #endregion
 
 
-    #region === Simulation Steps ===
+    #region === Simulation Helpers ===
     private void UpdateClothBoundsGPUGetData()
     {
         if (cloths.Count == 0 || buffers.ClothAabbsBuffer == null)
@@ -342,8 +342,6 @@ public class GpuXpbdSolver : MonoBehaviour
         buffers.UploadBoxes(compute, Kid.BuildBoxConstraints, _boxScratch);
         buffers.UploadMeshes(compute, Kid.BuildMeshConstraints, _meshTrisScratch, _meshRangesScratch);
     }
-    #endregion
-
     private void RebuildSpatialHash()
     {
         if (buffers == null || buffers.ParticleCount <= 0) return;
@@ -370,7 +368,7 @@ public class GpuXpbdSolver : MonoBehaviour
 
         compute.Dispatch(Kid.HashFillEntries, groupsP, 1, 1);
     }
-
+    #endregion
 
     #region == Attachment Helpers ===
     private bool TryFindAttachmentForParticle(Vector3 particlePos, float particleRadius, out Transform tr, out Vector3 contactPoint)

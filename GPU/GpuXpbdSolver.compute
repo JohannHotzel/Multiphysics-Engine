@@ -507,7 +507,7 @@ void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
 }
 
 
-// ------------------ Spacial Hashing -------------------
+// ------------------ Spatial Hashing -------------------
 int3 HashGridCoord(float3 p, float spacing)
 {
     return (int3) floor(p / spacing);

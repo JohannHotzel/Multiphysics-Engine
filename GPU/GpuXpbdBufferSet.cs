@@ -20,13 +20,13 @@ public sealed class GpuXpbdBufferSet
     public ComputeBuffer SphereBuffer, CapsuleBuffer, BoxBuffer;
     public ComputeBuffer MeshTriangleBuffer, MeshRangeBuffer;
 
-    // --- Spacial Hashing Buffers ---
+    // --- Spacial Hashing Buffers ----
     public ComputeBuffer HashCellStarts, HashCellEntries;
     public int HashTableSize;
     public float HashSpacing;
 
     // ---- Attachment Buffers ----
-    public ComputeBuffer AttachmentObjectsBuffer, AttachmentConstraintsBuffer; 
+    public ComputeBuffer AttachmentObjectsBuffer, AttachmentConstraintsBuffer;
 
     // ---- Cloth/Broadphase ----
     public ComputeBuffer ClothRangesBuffer, ClothAabbsBuffer;
@@ -36,7 +36,7 @@ public sealed class GpuXpbdBufferSet
 
 
 
-    // -------- Init / Teardown --------
+    // ---- Init / Teardown ----
     public void InitializeParticlesAndConstraints(GpuParticle[] particles, GpuDistanceConstraint[] constraints, GpuAttachmentObject[] attachObjs, GpuAttachmentConstraint[] attachCons, float growFactor = 1.5f)
     {
         ParticleCount = particles?.Length ?? 0;
@@ -147,7 +147,7 @@ public sealed class GpuXpbdBufferSet
     }
 
 
-    // -------- Zero / Counts --------
+    // ---- Zero / Counts ----
     public void ZeroAccumulators()
     {
         if (ParticleCount <= 0) return;
@@ -163,14 +163,14 @@ public sealed class GpuXpbdBufferSet
     }
 
 
-    // -------- Binding Helpers --------
+    // ---- Binding Helpers ----
     public void BindParticlesTo(ComputeShader cs, params int[] kernels)
     {
         if (ParticleBuffer == null) return;
         for (int i = 0; i < kernels.Length; i++)
             cs.SetBuffer(kernels[i], Sid.Particles, ParticleBuffer);
     }
-    public void BindDistanceSolve(ComputeShader cs, int solveDistanceKernel, int applyDeltasKernel)
+    public void BindDistanceSolve(ComputeShader cs, int solveDistanceKernel)
     {
         if (ConstraintBuffer != null)
             cs.SetBuffer(solveDistanceKernel, Sid.Constraints, ConstraintBuffer);
@@ -228,7 +228,7 @@ public sealed class GpuXpbdBufferSet
     }
 
 
-    // -------- Collider Upload --------
+    // ---- Collider Upload ----
     public void UploadSpheres(ComputeShader cs, int buildKernel, List<GpuSphereCollider> spheres)
     {
         int count = spheres?.Count ?? 0;
@@ -280,7 +280,7 @@ public sealed class GpuXpbdBufferSet
     }
 
 
-    // -------- Helpers --------
+    // ---- Helpers ----
     public static void Ensure(ref ComputeBuffer buf, int neededCount, int stride, ComputeBufferType type = ComputeBufferType.Structured, float growFactor = 1.5f)
     {
         int current = (buf == null) ? 0 : buf.count;
