@@ -46,12 +46,21 @@ struct CollisionConstraint
 	float3 target;
 	float3 normal;
 	float radius;
+    int rbIndex;
+};
+
+struct ImpulseEvent   
+{
+    int rbIndex;
+    float3 pointWS;
+    float3 J;
 };
 
 struct SphereCollider
 {
 	float3 center;
 	float radius;
+    int rbIndex;
 };
 
 struct CapsuleCollider
@@ -59,6 +68,7 @@ struct CapsuleCollider
 	float3 p0;
 	float3 p1;
 	float r;
+    int rbIndex;
 };
 
 struct BoxCollider
@@ -68,6 +78,7 @@ struct BoxCollider
 	float3 axisUp;
 	float3 axisForward;
 	float3 halfExtents;
+    int rbIndex;
 };
 
 struct Triangle
@@ -81,6 +92,7 @@ struct MeshRange
 {
 	uint start;
 	uint count;
+    int rbIndex;
 };
 
 

@@ -29,16 +29,19 @@
 #include "Includes/XPBD_Types.hlsl"
 #include "Includes/XPBD_CollisionChecks.hlsl"
 
-
+// Particles
 RWStructuredBuffer<Particle> particles;
 int particleCount;
 
+// Distance Constraints
 StructuredBuffer<DistanceConstraint> constraints;
 int constraintCount;
 
+// Cloth / Broadphase
 StructuredBuffer<ClothRange> clothRanges;
 RWStructuredBuffer<Aabb> clothAabbs;
 
+// Colliders
 StructuredBuffer<SphereCollider> spheres;
 int sphereCount;
 
@@ -52,27 +55,28 @@ StructuredBuffer<Triangle> meshTriangles;
 StructuredBuffer<MeshRange> meshRanges;
 int meshCount;
 
+// Collision constraints
+RWStructuredBuffer<CollisionConstraint> collisionConstraints;
+RWStructuredBuffer<uint> collisionCounts;
+AppendStructuredBuffer<ImpulseEvent> impulseEvents;
+
+// Attachment constraints
+StructuredBuffer<AttachmentObject> attachmentObjects;
+int attachmentObjectCount;
+StructuredBuffer<AttachmentConstraint> attachmentConstraints;
+int attachmentConstraintCount;
+
+// Spatial Hashing
+RWStructuredBuffer<uint> hashCellStarts; 
+RWStructuredBuffer<uint> hashCellEntries;
+int hashTableSize;
+float hashSpacing;
+
+// Delta buffers for Jacobi constraint solving
 RWStructuredBuffer<uint> deltaX;
 RWStructuredBuffer<uint> deltaY;
 RWStructuredBuffer<uint> deltaZ;
 RWStructuredBuffer<uint> countBuf;
-
-RWStructuredBuffer<CollisionConstraint> collisionConstraints;
-RWStructuredBuffer<uint> collisionCounts;
-
-
-StructuredBuffer<AttachmentObject> attachmentObjects;
-int attachmentObjectCount;
-
-StructuredBuffer<AttachmentConstraint> attachmentConstraints;
-int attachmentConstraintCount;
-
-RWStructuredBuffer<uint> hashCellStarts; // size: hashTableSize + 1
-RWStructuredBuffer<uint> hashCellEntries; // size: >= particleCount
-int hashTableSize;
-float hashSpacing;
-
-
 
 float dt, dts, dts2;
 float3 gravity;
@@ -295,6 +299,7 @@ void BuildSphereConstraints(uint3 id : SV_DispatchThreadID)
                 cc.target = target;
                 cc.normal = n;
                 cc.radius = pr;
+                cc.rbIndex = spheres[s].rbIndex;
                 collisionConstraints[writeIndex] = cc;
             }
         }
@@ -334,6 +339,7 @@ void BuildCapsuleConstraints(uint3 id : SV_DispatchThreadID)
                 cc.target = target;
                 cc.normal = n;
                 cc.radius = pr;
+                cc.rbIndex = capsules[c].rbIndex;
                 collisionConstraints[writeIndex] = cc;
             }
         }
@@ -373,6 +379,7 @@ void BuildBoxConstraints(uint3 id : SV_DispatchThreadID)
                 cc.target = target;
                 cc.normal = n;
                 cc.radius = pr;
+                cc.rbIndex = boxes[b].rbIndex;
                 collisionConstraints[writeIndex] = cc;
             }
         }
@@ -420,6 +427,7 @@ void BuildMeshConstraints(uint3 id : SV_DispatchThreadID)
                     cc.target = target;
                     cc.normal = n;
                     cc.radius = pr;
+                    cc.rbIndex = meshRanges[m].rbIndex;
                     collisionConstraints[writeIndex] = cc;
                 }
             }
@@ -429,6 +437,16 @@ void BuildMeshConstraints(uint3 id : SV_DispatchThreadID)
 
 
 // ------------------ SolveCollisionConstraints (per particle) ------------------
+[numthreads(THREADS, 1, 1)]
+void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= particleCount)
+        return;
+    
+    collisionCounts[i] = 0;
+}
+
 [numthreads(THREADS, 1, 1)]
 void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
 {
@@ -461,7 +479,21 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
 
             if (phi < 0.0f)
             {
-                p.positionX -= cc.normal * phi;
+                float3 dX = -cc.normal * phi;
+                p.positionX += dX;
+
+                if (cc.rbIndex >= 0)
+                {
+                    float mi = p.m;
+                    float3 J = (mi * dX) / dts;
+                    float3 contact = p.positionX - cc.normal * cc.radius;
+
+                    ImpulseEvent ev;
+                    ev.rbIndex = cc.rbIndex;
+                    ev.pointWS = contact;
+                    ev.J = -J;
+                    impulseEvents.Append(ev);
+                }
             }
         }
     }
@@ -492,18 +524,6 @@ void SetAttachmentPositions(uint3 tid : SV_DispatchThreadID)
     p.positionPredicted = target;
 
     particles[i] = p;
-}
-
-
-// ------------------ Reset Collision Counts ------------------
-[numthreads(THREADS, 1, 1)]
-void ResetCollisionCounts(uint3 id : SV_DispatchThreadID)
-{
-    uint i = id.x;
-    if (i >= particleCount)
-        return;
-    
-    collisionCounts[i] = 0;
 }
 
 

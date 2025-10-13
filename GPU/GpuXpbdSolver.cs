@@ -15,10 +15,12 @@ public class GpuXpbdSolver : MonoBehaviour
     [SerializeField] private float particleRadiusSim = 0.025f;
 
     [Header("Collision Filter")]
+    [SerializeField] private bool enableParticleParticleCollision = false;
+    [SerializeField] private bool enableRigidbodyCoupling = true;
     [SerializeField] private float maxSeparationSpeed = 1.5f;
     [SerializeField] private LayerMask overlapLayerMask = ~0;
     [SerializeField] private QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Ignore;
-    [SerializeField] private bool enableParticleParticleCollision = false;
+    
 
     [Header("GPU Collision")]
     [SerializeField] private float boundsPadding = 1.0f;
@@ -46,6 +48,9 @@ public class GpuXpbdSolver : MonoBehaviour
     private readonly List<GpuBoxCollider> _boxScratch = new();
     private readonly List<GpuTriangle> _meshTrisScratch = new();
     private readonly List<GpuMeshRange> _meshRangesScratch = new();
+
+    private readonly List<Rigidbody> _rbList = new();
+    private readonly Dictionary<Rigidbody, int> _rbToIndex = new();
 
     // Attachments
     private readonly List<GpuAttachmentObject> _attachObjsCpu = new();
@@ -112,26 +117,41 @@ public class GpuXpbdSolver : MonoBehaviour
         {
             compute.Dispatch(Kid.Integrate, groupsP, 1, 1);
 
+            // Attachments
             if (buffers.AttachmentConstraintCount > 0) compute.Dispatch(Kid.SetAttachmentPositions, groupsA, 1, 1);
 
-            if (buffers.ConstraintCount > 0)
-            {
-                compute.Dispatch(Kid.SolveDistanceJacobi, groupsC, 1, 1);
-                compute.Dispatch(Kid.ApplyDeltas, groupsP, 1, 1);
-            }
+            // Distance constraints
+            if (buffers.ConstraintCount > 0) { compute.Dispatch(Kid.SolveDistanceJacobi, groupsC, 1, 1); compute.Dispatch(Kid.ApplyDeltas, groupsP, 1, 1); }
 
-            if (enableParticleParticleCollision)
-            {
-                compute.Dispatch(Kid.SolveParticleCollisionsHashed, groupsP, 1, 1);
-                compute.Dispatch(Kid.ApplyDeltas, groupsP, 1, 1);
-            }
+            // Particle collisions
+            if (enableParticleParticleCollision) { compute.Dispatch(Kid.SolveParticleCollisionsHashed, groupsP, 1, 1); compute.Dispatch(Kid.ApplyDeltas, groupsP, 1, 1); }
 
+            // Collider collisions
             compute.Dispatch(Kid.ResetCollisionCounts, groupsP, 1, 1);
             if (buffers.SphereBuffer != null) compute.Dispatch(Kid.BuildSphereConstraints, groupsP, 1, 1);
             if (buffers.CapsuleBuffer != null) compute.Dispatch(Kid.BuildCapsuleConstraints, groupsP, 1, 1);
             if (buffers.BoxBuffer != null) compute.Dispatch(Kid.BuildBoxConstraints, groupsP, 1, 1);
             if (buffers.MeshTriangleBuffer != null) compute.Dispatch(Kid.BuildMeshConstraints, groupsP, 1, 1);
+
+            if (enableRigidbodyCoupling) buffers.ResetImpulseEvents();
             compute.Dispatch(Kid.SolveCollisionConstraints, groupsP, 1, 1);
+
+            // Apply impulses to rigidbodies
+            if (enableRigidbodyCoupling)                                        
+            {
+                int evtCount = buffers.GetImpulseEventCount();
+                if (evtCount > 0)
+                {
+                    var evts = new GpuImpulseEvent[evtCount];
+                    buffers.ImpulseEventBuffer.GetData(evts, 0, 0, evtCount);
+                    for (int e = 0; e < evtCount; e++)
+                    {
+                        int idx = evts[e].rbIndex;
+                        if ((uint)idx < (uint)_rbList.Count && _rbList[idx] != null)
+                            _rbList[idx].AddForceAtPosition(evts[e].J, evts[e].pointWS, ForceMode.Impulse);
+                    }
+                }
+            }
 
             compute.Dispatch(Kid.UpdateVelocities, groupsP, 1, 1);
         }
@@ -311,29 +331,49 @@ public class GpuXpbdSolver : MonoBehaviour
         _meshTrisScratch.Clear();
         _meshRangesScratch.Clear();
 
+        _rbList.Clear();
+        _rbToIndex.Clear();
+
         foreach (Collider col in _overlapSet)
         {
+
+            int rbIndex = -1;
+            if (enableRigidbodyCoupling)
+            {
+                var rb = col.attachedRigidbody;
+                if (rb != null)
+                {
+                    if (!_rbToIndex.TryGetValue(rb, out rbIndex))
+                    {
+                        rbIndex = _rbList.Count;
+                        _rbToIndex[rb] = rbIndex;
+                        _rbList.Add(rb);
+                    }
+                }
+            }
+
+
             if (col is SphereCollider sc)
             {
                 Transform t = sc.transform;
                 Vector3 center = t.TransformPoint(sc.center);
                 Vector3 s = t.lossyScale;
                 float radius = sc.radius * Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z));
-                _sphereScratch.Add(new GpuSphereCollider(center, radius));
+                _sphereScratch.Add(new GpuSphereCollider(center, radius, rbIndex));
             }
             else if (col is CapsuleCollider cc)
             {
                 ExtractCapsule(cc, out var p0, out var p1, out float r);
-                _capsuleScratch.Add(new GpuCapsuleCollider(p0, p1, r));
+                _capsuleScratch.Add(new GpuCapsuleCollider(p0, p1, r, rbIndex));
             }
             else if (col is BoxCollider bc)
             {
                 ExtractBox(bc, out var center, out var right, out var up, out var fwd, out var halfExtents);
-                _boxScratch.Add(new GpuBoxCollider(center, right, up, fwd, halfExtents));
+                _boxScratch.Add(new GpuBoxCollider(center, right, up, fwd, halfExtents, rbIndex));
             }
             else if (col is MeshCollider mc && mc.sharedMesh != null)
             {
-                ExtractMeshTriangles(mc, _meshTrisScratch, _meshRangesScratch);
+                ExtractMeshTriangles(mc, _meshTrisScratch, _meshRangesScratch, rbIndex);
             }
         }
 
@@ -449,7 +489,7 @@ public class GpuXpbdSolver : MonoBehaviour
 
         center = t.TransformPoint(bc.center);
     }
-    private static void ExtractMeshTriangles(MeshCollider mc, List<GpuTriangle> outTris, List<GpuMeshRange> outRanges)
+    private static void ExtractMeshTriangles(MeshCollider mc, List<GpuTriangle> outTris, List<GpuMeshRange> outRanges, int rbIndex)
     {
         var mesh = mc.sharedMesh;
         var t = mc.transform;
@@ -469,7 +509,7 @@ public class GpuXpbdSolver : MonoBehaviour
 
         uint count = (uint)(outTris.Count) - start;
         if (count > 0)
-            outRanges.Add(new GpuMeshRange(start, count));
+            outRanges.Add(new GpuMeshRange(start, count, rbIndex));
     }
     #endregion
 }

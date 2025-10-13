@@ -22,8 +22,18 @@ public struct GpuCollisionConstraint
     public Vector3 target;
     public Vector3 normal;
     public float radius;
+    public int rbIndex;
+    
+    public const int Stride = (3 + 3 + 1) * sizeof(float) + sizeof(int); // 32
+}
 
-    public const int Stride = (3 + 3 + 1) * sizeof(float); // 28
+public struct GpuImpulseEvent
+{
+    public int rbIndex;
+    public Vector3 pointWS;
+    public Vector3 J;
+
+    public const int Stride = sizeof(int) + sizeof(float) * 6; // float3*2 + int = 28
 }
 
 
@@ -37,6 +47,7 @@ public struct GpuAttachmentConstraint
 {
     public uint particle;                
     public uint objectIndex;             
-    public Vector3 localPoint;          
+    public Vector3 localPoint;
+
     public const int Stride = sizeof(uint) * 2 + sizeof(float) * 3; // 8 + 12 = 20
 }

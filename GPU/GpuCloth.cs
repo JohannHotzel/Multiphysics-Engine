@@ -9,6 +9,10 @@ public class GpuCloth : MonoBehaviour
     public float width = 10f;
     public float height = 10f;
 
+    [Header("Mass")]
+    public float clothMass = 1f;
+    private float particleMass => clothMass / (numParticlesX * numParticlesY);
+
     [Header("Constraint Types")]
     public bool useStructural = true;
     public bool useShear = true;
@@ -20,8 +24,7 @@ public class GpuCloth : MonoBehaviour
     [Header("Pinning")]
     public bool pinTopRow = true;
 
-    [Header("Overrides (optional)")]
-    public float? particleRadiusOverride;
+
 
 
 
@@ -41,7 +44,7 @@ public class GpuCloth : MonoBehaviour
         }
     }
 
-    public void Build(out GpuParticle[] particles, out GpuDistanceConstraint[] constraints, float defaultRadius)
+    public void Build(out GpuParticle[] particles, out GpuDistanceConstraint[] constraints, float radius)
     {
         int nX = Mathf.Max(1, numParticlesX);
         int nY = Mathf.Max(1, numParticlesY);
@@ -54,15 +57,13 @@ public class GpuCloth : MonoBehaviour
         float offsetX = (nX > 1) ? width * 0.5f : 0f;
         float offsetY = (nY > 1) ? height * 0.5f : 0f;
 
-        float radius = particleRadiusOverride ?? defaultRadius;
-
         int idx = 0;
         for (int j = 0; j < nY; j++)
             for (int i = 0; i < nX; i++)
             {
                 Vector3 localPos = new Vector3(i * dx - offsetX, j * dy - offsetY, 0f);
                 Vector3 worldPos = transform.TransformPoint(localPos);
-                particles[idx++] = new GpuParticle(worldPos, 1f, radius);
+                particles[idx++] = new GpuParticle(worldPos, particleMass, radius);
             }
 
         if (pinTopRow)
@@ -70,7 +71,10 @@ public class GpuCloth : MonoBehaviour
             for (int x = 0; x < nX; x++)
             {
                 int idTop = (nY - 1) * nX + x;
-                var p = particles[idTop]; p.m = 0f; p.w = 0f; particles[idTop] = p;
+                var p = particles[idTop];
+                p.m = 0f;
+                p.w = 0f;
+                particles[idTop] = p;
             }
         }
 

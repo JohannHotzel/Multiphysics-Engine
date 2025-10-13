@@ -77,6 +77,7 @@ public static class GpuXpbdShaderIds
 
         public static readonly int CollisionConstraints = Shader.PropertyToID("collisionConstraints");
         public static readonly int CollisionCounts = Shader.PropertyToID("collisionCounts");
+        public static readonly int ImpulseEvents = Shader.PropertyToID("impulseEvents");
 
         public static readonly int Spheres = Shader.PropertyToID("spheres");
         public static readonly int SphereCount = Shader.PropertyToID("sphereCount");

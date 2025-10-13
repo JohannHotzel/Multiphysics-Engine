@@ -17,6 +17,8 @@ public sealed class GpuXpbdBufferSet
 
     // ---- Collision Buffers ----
     public ComputeBuffer CollisionConstraintBuffer, CollisionCountBuffer;
+    public ComputeBuffer ImpulseEventBuffer;
+    private ComputeBuffer _appendCountScratch;
     public ComputeBuffer SphereBuffer, CapsuleBuffer, BoxBuffer;
     public ComputeBuffer MeshTriangleBuffer, MeshRangeBuffer;
 
@@ -68,6 +70,10 @@ public sealed class GpuXpbdBufferSet
         Ensure(ref CollisionConstraintBuffer, colCap, GpuCollisionConstraint.Stride);
         Ensure(ref CollisionCountBuffer, ParticleCount, sizeof(uint));
         ZeroUInt(ref CollisionCountBuffer, ParticleCount);
+
+        int evtCap = Mathf.Max(1, ParticleCount * MAX_COLLISIONS);
+        Ensure(ref ImpulseEventBuffer, evtCap, GpuImpulseEvent.Stride, ComputeBufferType.Append);
+        ImpulseEventBuffer.SetCounterValue(0);
 
         // Attachments
         AttachmentObjectCount = attachObjs?.Length ?? 0;
@@ -123,6 +129,8 @@ public sealed class GpuXpbdBufferSet
 
         Release(ref CollisionConstraintBuffer);
         Release(ref CollisionCountBuffer);
+        Release(ref ImpulseEventBuffer);
+        Release(ref _appendCountScratch);
         Release(ref SphereBuffer);
         Release(ref CapsuleBuffer);
         Release(ref BoxBuffer);
@@ -185,6 +193,8 @@ public sealed class GpuXpbdBufferSet
         cs.SetBuffer(solveKernel, Sid.CollisionConstraints, CollisionConstraintBuffer);
         cs.SetBuffer(solveKernel, Sid.CollisionCounts, CollisionCountBuffer);
         cs.SetBuffer(resetKernel, Sid.CollisionCounts, CollisionCountBuffer);
+
+        cs.SetBuffer(solveKernel, Sid.ImpulseEvents, ImpulseEventBuffer);
     }
     public void BindAttachments(ComputeShader cs, params int[] kernels)
     {
@@ -310,5 +320,15 @@ public sealed class GpuXpbdBufferSet
         var zeros = new uint[count];
         buffer.SetData(zeros);
     }
+    
+    public void ResetImpulseEvents() => ImpulseEventBuffer?.SetCounterValue(0);
+    public int GetAppendCount(ComputeBuffer append)                              
+    {
+        _appendCountScratch ??= new ComputeBuffer(1, sizeof(uint), ComputeBufferType.Raw);
+        ComputeBuffer.CopyCount(append, _appendCountScratch, 0);
+        var tmp = new uint[1]; _appendCountScratch.GetData(tmp);
+        return (int)tmp[0];
+    }
+    public int GetImpulseEventCount() => GetAppendCount(ImpulseEventBuffer);
 
 }
