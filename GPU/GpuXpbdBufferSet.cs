@@ -39,7 +39,7 @@ public sealed class GpuXpbdBufferSet
 
 
     // ---- Init / Teardown ----
-    public void InitializeParticlesAndConstraints(GpuParticle[] particles, GpuDistanceConstraint[] constraints, GpuAttachmentObject[] attachObjs, GpuAttachmentConstraint[] attachCons, float growFactor = 1.5f)
+    public void InitializeParticlesAndConstraints(GpuParticle[] particles, GpuDistanceConstraint[] constraints, GpuAttachmentObject[] attachObjs, GpuAttachmentConstraint[] attachCons, int substeps, float growFactor = 1.5f)
     {
         ParticleCount = particles?.Length ?? 0;
         ConstraintCount = constraints?.Length ?? 0;
@@ -71,7 +71,8 @@ public sealed class GpuXpbdBufferSet
         Ensure(ref CollisionCountBuffer, ParticleCount, sizeof(uint));
         ZeroUInt(ref CollisionCountBuffer, ParticleCount);
 
-        int evtCap = Mathf.Max(1, ParticleCount * MAX_COLLISIONS);
+        // Impulse events (append buffer)
+        int evtCap = Mathf.Max(1, ParticleCount * MAX_COLLISIONS * substeps);
         Ensure(ref ImpulseEventBuffer, evtCap, GpuImpulseEvent.Stride, ComputeBufferType.Append);
         ImpulseEventBuffer.SetCounterValue(0);
 

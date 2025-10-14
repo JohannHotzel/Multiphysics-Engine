@@ -103,15 +103,20 @@ public class GpuXpbdSolver : MonoBehaviour
         int groupsC = Mathf.CeilToInt(Mathf.Max(1, buffers.ConstraintCount) / (float)THREADS);
         int groupsA = Mathf.CeilToInt(buffers.AttachmentConstraintCount / (float)THREADS);
 
+        // Collision broadphase
         compute.Dispatch(Kid.Predict, groupsP, 1, 1);
         UpdateClothBoundsGPUGetData();
         GetBoundOverlaps();
         UpdateCollisionBuffers();
-        
+
+        // Attachments
         UpdateAttachmentObjects();
 
-        if(enableParticleParticleCollision)
-            RebuildSpatialHash();
+        // Spatial hash
+        if (enableParticleParticleCollision) RebuildSpatialHash();
+
+        // Clear impulses
+        if (enableRigidbodyCoupling) buffers.ResetImpulseEvents();
 
         for (int s = 0; s < substeps; s++)
         {
@@ -133,28 +138,29 @@ public class GpuXpbdSolver : MonoBehaviour
             if (buffers.BoxBuffer != null) compute.Dispatch(Kid.BuildBoxConstraints, groupsP, 1, 1);
             if (buffers.MeshTriangleBuffer != null) compute.Dispatch(Kid.BuildMeshConstraints, groupsP, 1, 1);
 
-            if (enableRigidbodyCoupling) buffers.ResetImpulseEvents();
+            
             compute.Dispatch(Kid.SolveCollisionConstraints, groupsP, 1, 1);
-
-            // Apply impulses to rigidbodies
-            if (enableRigidbodyCoupling)                                        
-            {
-                int evtCount = buffers.GetImpulseEventCount();
-                if (evtCount > 0)
-                {
-                    var evts = new GpuImpulseEvent[evtCount];
-                    buffers.ImpulseEventBuffer.GetData(evts, 0, 0, evtCount);
-                    for (int e = 0; e < evtCount; e++)
-                    {
-                        int idx = evts[e].rbIndex;
-                        if ((uint)idx < (uint)_rbList.Count && _rbList[idx] != null)
-                            _rbList[idx].AddForceAtPosition(evts[e].J, evts[e].pointWS, ForceMode.Impulse);
-                    }
-                }
-            }
 
             compute.Dispatch(Kid.UpdateVelocities, groupsP, 1, 1);
         }
+
+        // Apply impulses to rigidbodies
+        if (enableRigidbodyCoupling)
+        {
+            int evtCount = buffers.GetImpulseEventCount();
+            if (evtCount > 0)
+            {
+                var evts = new GpuImpulseEvent[evtCount];
+                buffers.ImpulseEventBuffer.GetData(evts, 0, 0, evtCount);
+                for (int e = 0; e < evtCount; e++)
+                {
+                    int idx = evts[e].rbIndex;
+                    if ((uint)idx < (uint)_rbList.Count && _rbList[idx] != null)
+                        _rbList[idx].AddForceAtPosition(evts[e].J, evts[e].pointWS, ForceMode.Impulse);
+                }
+            }
+        }
+
     }
     #endregion
 
@@ -246,7 +252,7 @@ public class GpuXpbdSolver : MonoBehaviour
         }
 
         // Core init
-        buffers.InitializeParticlesAndConstraints(allParticles, allConstraints, attachObjs, attachCons, bufferGrowFactor);
+        buffers.InitializeParticlesAndConstraints(allParticles, allConstraints, attachObjs, attachCons, substeps, bufferGrowFactor);
         buffers.SetCountsOn(compute);
 
 
