@@ -277,12 +277,14 @@ void BuildSphereConstraints(uint3 id : SV_DispatchThreadID)
     if (p.w == 0.0f)
         return;
 
-    float3 x = p.positionX;
-    float pr = p.radius;
-
-    [branch]
     if (sphereCount == 0)
         return;
+
+    if (collisionCounts[i] != 0)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
 
     [loop]
     for (int s = 0; s < sphereCount; s++)
@@ -290,17 +292,17 @@ void BuildSphereConstraints(uint3 id : SV_DispatchThreadID)
         float3 target, n;
         if (CollideSphere(x, pr, spheres[s], target, n))
         {
-            uint idx;
-            InterlockedAdd(collisionCounts[i], 1, idx);
-            if (idx < MAX_COLLISIONS)
+            uint prev;
+            InterlockedCompareExchange(collisionCounts[i], 0, 1, prev);
+            if (prev == 0)
             {
-                uint writeIndex = i * MAX_COLLISIONS + idx;
                 CollisionConstraint cc;
                 cc.target = target;
                 cc.normal = n;
                 cc.radius = pr;
                 cc.rbIndex = spheres[s].rbIndex;
-                collisionConstraints[writeIndex] = cc;
+                collisionConstraints[i] = cc;
+                break;
             }
         }
     }
@@ -317,12 +319,14 @@ void BuildCapsuleConstraints(uint3 id : SV_DispatchThreadID)
     if (p.w == 0.0f)
         return;
 
-    float3 x = p.positionX;
-    float pr = p.radius;
-
-    [branch]
     if (capsuleCount == 0)
         return;
+
+    if (collisionCounts[i] != 0)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
 
     [loop]
     for (int c = 0; c < capsuleCount; c++)
@@ -330,17 +334,17 @@ void BuildCapsuleConstraints(uint3 id : SV_DispatchThreadID)
         float3 target, n;
         if (CollideCapsule(x, pr, capsules[c], target, n))
         {
-            uint idx;
-            InterlockedAdd(collisionCounts[i], 1, idx);
-            if (idx < MAX_COLLISIONS)
+            uint prev;
+            InterlockedCompareExchange(collisionCounts[i], 0, 1, prev);
+            if (prev == 0)
             {
-                uint writeIndex = i * MAX_COLLISIONS + idx;
                 CollisionConstraint cc;
                 cc.target = target;
                 cc.normal = n;
                 cc.radius = pr;
                 cc.rbIndex = capsules[c].rbIndex;
-                collisionConstraints[writeIndex] = cc;
+                collisionConstraints[i] = cc;
+                break;
             }
         }
     }
@@ -357,12 +361,14 @@ void BuildBoxConstraints(uint3 id : SV_DispatchThreadID)
     if (p.w == 0.0f)
         return;
 
-    float3 x = p.positionX;
-    float pr = p.radius;
-
-    [branch]
     if (boxCount == 0)
         return;
+
+    if (collisionCounts[i] != 0)
+        return;
+
+    float3 x = p.positionX;
+    float pr = p.radius;
 
     [loop]
     for (int b = 0; b < boxCount; b++)
@@ -370,17 +376,17 @@ void BuildBoxConstraints(uint3 id : SV_DispatchThreadID)
         float3 target, n;
         if (CollideBox(x, pr, boxes[b], target, n))
         {
-            uint idx;
-            InterlockedAdd(collisionCounts[i], 1, idx);
-            if (idx < MAX_COLLISIONS)
+            uint prev;
+            InterlockedCompareExchange(collisionCounts[i], 0, 1, prev);
+            if (prev == 0)
             {
-                uint writeIndex = i * MAX_COLLISIONS + idx;
                 CollisionConstraint cc;
                 cc.target = target;
                 cc.normal = n;
                 cc.radius = pr;
                 cc.rbIndex = boxes[b].rbIndex;
-                collisionConstraints[writeIndex] = cc;
+                collisionConstraints[i] = cc;
+                break;
             }
         }
     }
@@ -400,6 +406,9 @@ void BuildMeshConstraints(uint3 id : SV_DispatchThreadID)
     if (meshCount == 0)
         return;
 
+    if (collisionCounts[i] != 0)
+        return;
+
     float3 x = p.positionX;
     float pr = p.radius;
 
@@ -410,6 +419,8 @@ void BuildMeshConstraints(uint3 id : SV_DispatchThreadID)
         uint start = r.start;
         uint count = r.count;
 
+        bool written = false;
+
         [loop]
         for (uint t = 0; t < count; t++)
         {
@@ -418,20 +429,28 @@ void BuildMeshConstraints(uint3 id : SV_DispatchThreadID)
             float3 target, n;
             if (CollideTriangle(x, pr, tri, target, n))
             {
-                uint idx;
-                InterlockedAdd(collisionCounts[i], 1, idx);
-                if (idx < MAX_COLLISIONS)
+                uint prev;
+                InterlockedCompareExchange(collisionCounts[i], 0, 1, prev);
+                if (prev == 0)
                 {
-                    uint writeIndex = i * MAX_COLLISIONS + idx;
                     CollisionConstraint cc;
                     cc.target = target;
                     cc.normal = n;
                     cc.radius = pr;
                     cc.rbIndex = meshRanges[m].rbIndex;
-                    collisionConstraints[writeIndex] = cc;
+                    collisionConstraints[i] = cc;
+
+                    written = true;
+                    break; 
                 }
             }
         }
+
+        if (written)
+            break; 
+        if (collisionCounts[i] != 0)
+            break; 
+        
     }
 }
 
@@ -458,42 +477,36 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
     if (p.w == 0.0f)
         return;
 
-    uint n = collisionCounts[i];
-    if (n == 0)
+    uint has = collisionCounts[i];
+    if (has == 0)
         return;
-    n = (n > MAX_COLLISIONS) ? MAX_COLLISIONS : n;
 
-    for (uint k = 0; k < n; k++)
+    CollisionConstraint cc = collisionConstraints[i];
+
+    float C = dot(p.positionX - cc.target, cc.normal) - cc.radius;
+
+    if (C < 0.0f)
     {
-        uint readIndex = i * MAX_COLLISIONS + k;
-        CollisionConstraint cc = collisionConstraints[readIndex];
+        float d0 = -C;
+        float bias = (vMax > 0.0f) ? max(d0 - vMax * dts, 0.0f) : 0.0f;
+        float phi = C + bias;
 
-        float C = dot(p.positionX - cc.target, cc.normal) - cc.radius;
-        
-        if (C < 0.0f)
+        if (phi < 0.0f)
         {
-            //Bias to clamp maximum velocity
-            float d0 = -C;
-            float bias = (vMax > 0.0f) ? max(d0 - vMax * dts, 0.0f) : 0.0f;
-            float phi = C + bias;
+            float3 dX = -cc.normal * phi;
+            p.positionX += dX;
 
-            if (phi < 0.0f)
+            if (cc.rbIndex >= 0)
             {
-                float3 dX = -cc.normal * phi;
-                p.positionX += dX;
+                float mi = p.m;
+                float3 J = (mi * dX) / dts;
+                float3 contact = p.positionX - cc.normal * cc.radius;
 
-                if (cc.rbIndex >= 0)
-                {
-                    float mi = p.m;
-                    float3 J = (mi * dX) / dts;
-                    float3 contact = p.positionX - cc.normal * cc.radius;
-
-                    ImpulseEvent ev;
-                    ev.rbIndex = cc.rbIndex;
-                    ev.pointWS = contact;
-                    ev.J = -J;
-                    impulseEvents.Append(ev);
-                }
+                ImpulseEvent ev;
+                ev.rbIndex = cc.rbIndex;
+                ev.pointWS = contact;
+                ev.J = -J;
+                impulseEvents.Append(ev);
             }
         }
     }

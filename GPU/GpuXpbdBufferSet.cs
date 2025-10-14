@@ -33,8 +33,6 @@ public sealed class GpuXpbdBufferSet
     // ---- Cloth/Broadphase ----
     public ComputeBuffer ClothRangesBuffer, ClothAabbsBuffer;
 
-    // ---- Internal ----
-    private const int MAX_COLLISIONS = 8;
 
 
 
@@ -66,13 +64,13 @@ public sealed class GpuXpbdBufferSet
         ZeroAccumulators();
 
         // Collision constraints (per particle)
-        int colCap = Mathf.Max(1, ParticleCount * MAX_COLLISIONS);
+        int colCap = Mathf.Max(1, ParticleCount);
         Ensure(ref CollisionConstraintBuffer, colCap, GpuCollisionConstraint.Stride);
         Ensure(ref CollisionCountBuffer, ParticleCount, sizeof(uint));
         ZeroUInt(ref CollisionCountBuffer, ParticleCount);
 
         // Impulse events (append buffer)
-        int evtCap = Mathf.Max(1, ParticleCount * MAX_COLLISIONS * substeps);
+        int evtCap = Mathf.Max(1, ParticleCount * substeps);
         Ensure(ref ImpulseEventBuffer, evtCap, GpuImpulseEvent.Stride, ComputeBufferType.Append);
         ImpulseEventBuffer.SetCounterValue(0);
 

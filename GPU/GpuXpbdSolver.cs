@@ -145,21 +145,8 @@ public class GpuXpbdSolver : MonoBehaviour
         }
 
         // Apply impulses to rigidbodies
-        if (enableRigidbodyCoupling)
-        {
-            int evtCount = buffers.GetImpulseEventCount();
-            if (evtCount > 0)
-            {
-                var evts = new GpuImpulseEvent[evtCount];
-                buffers.ImpulseEventBuffer.GetData(evts, 0, 0, evtCount);
-                for (int e = 0; e < evtCount; e++)
-                {
-                    int idx = evts[e].rbIndex;
-                    if ((uint)idx < (uint)_rbList.Count && _rbList[idx] != null)
-                        _rbList[idx].AddForceAtPosition(evts[e].J, evts[e].pointWS, ForceMode.Impulse);
-                }
-            }
-        }
+        if (enableRigidbodyCoupling) ApplyImpulseEventsToRigidbodies();
+
 
     }
     #endregion
@@ -297,7 +284,7 @@ public class GpuXpbdSolver : MonoBehaviour
     #endregion
 
 
-    #region === Simulation Helpers ===
+    #region === Collision Helpers ===
     private void UpdateClothBoundsGPUGetData()
     {
         if (cloths.Count == 0 || buffers.ClothAabbsBuffer == null)
@@ -388,11 +375,15 @@ public class GpuXpbdSolver : MonoBehaviour
         buffers.UploadBoxes(compute, Kid.BuildBoxConstraints, _boxScratch);
         buffers.UploadMeshes(compute, Kid.BuildMeshConstraints, _meshTrisScratch, _meshRangesScratch);
     }
+    #endregion
+
+
+    #region === Spatial Hash Helpers ===
     private void RebuildSpatialHash()
     {
         if (buffers == null || buffers.ParticleCount <= 0) return;
 
-        int groupsH = Mathf.CeilToInt( (buffers.HashTableSize + 1) / (float)THREADS);
+        int groupsH = Mathf.CeilToInt((buffers.HashTableSize + 1) / (float)THREADS);
         int groupsP = Mathf.CeilToInt(buffers.ParticleCount / (float)THREADS);
 
         compute.Dispatch(Kid.HashClearCounts, groupsH, 1, 1);
@@ -406,7 +397,7 @@ public class GpuXpbdSolver : MonoBehaviour
         for (int h = 0; h < buffers.HashTableSize; h++)
         {
             running += ends[h];
-            ends[h] = running; 
+            ends[h] = running;
         }
         ends[buffers.HashTableSize] = running;
 
@@ -415,6 +406,28 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.Dispatch(Kid.HashFillEntries, groupsP, 1, 1);
     }
     #endregion
+
+    #region === Rigid body coupling Helpers ===
+    private void ApplyImpulseEventsToRigidbodies()
+    {
+        if (buffers == null) return;
+
+        int evtCount = buffers.GetImpulseEventCount();
+        if (evtCount <= 0) return;
+
+        var evts = new GpuImpulseEvent[evtCount];
+        buffers.ImpulseEventBuffer.GetData(evts, 0, 0, evtCount);
+
+        for (int e = 0; e < evtCount; e++)
+        {
+            int idx = evts[e].rbIndex;
+            if ((uint)idx < (uint)_rbList.Count && _rbList[idx] != null)
+                _rbList[idx].AddForceAtPosition(evts[e].J, evts[e].pointWS, ForceMode.Impulse);
+        }
+    }
+
+    #endregion
+
 
     #region == Attachment Helpers ===
     private bool TryFindAttachmentForParticle(Vector3 particlePos, float particleRadius, out Transform tr, out Vector3 contactPoint)
@@ -449,6 +462,7 @@ public class GpuXpbdSolver : MonoBehaviour
         buffers.AttachmentObjectsBuffer.SetData(_attachObjsCpu);
     }
     #endregion
+
 
     #region === Geometry Extract Helpers ===
     private static void ExtractCapsule(CapsuleCollider cc, out Vector3 p0, out Vector3 p1, out float rWorld)

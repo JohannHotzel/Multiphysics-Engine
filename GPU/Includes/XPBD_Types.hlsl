@@ -2,7 +2,6 @@
 #define XPBD_TYPES_INCLUDED
 
 #define THREADS 256
-#define MAX_COLLISIONS 8
 
 
 // === Core Simulation ===
