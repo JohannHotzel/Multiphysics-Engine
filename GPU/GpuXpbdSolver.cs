@@ -425,7 +425,6 @@ public class GpuXpbdSolver : MonoBehaviour
                 _rbList[idx].AddForceAtPosition(evts[e].J, evts[e].pointWS, ForceMode.Impulse);
         }
     }
-
     #endregion
 
 
