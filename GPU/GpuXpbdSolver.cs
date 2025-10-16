@@ -20,7 +20,10 @@ public class GpuXpbdSolver : MonoBehaviour
     [SerializeField] private float maxSeparationSpeed = 1.5f;
     [SerializeField] private LayerMask overlapLayerMask = ~0;
     [SerializeField] private QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Ignore;
-    
+
+    [Header("Friction")]
+    [SerializeField, Range(0f, 5f)] private float staticFrictionMu = 0.6f;  // μ_s
+    [SerializeField, Range(0f, 5f)] private float kineticFrictionMu = 0.6f; // μ_k
 
     [Header("GPU Collision")]
     [SerializeField] private float boundsPadding = 1.0f;
@@ -98,6 +101,9 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.SetFloat(Sid.Omega, sorOmega);
         compute.SetFloat(Sid.VMax, maxSeparationSpeed);
         compute.SetFloat(Sid.CollisionMargin, collisionMargin);
+
+        compute.SetFloat(Sid.FrictionMuS, staticFrictionMu);
+        compute.SetFloat(Sid.FrictionMuK, kineticFrictionMu);
 
         int groupsP = Mathf.CeilToInt(Mathf.Max(1, buffers.ParticleCount) / (float)THREADS);
         int groupsC = Mathf.CeilToInt(Mathf.Max(1, buffers.ConstraintCount) / (float)THREADS);

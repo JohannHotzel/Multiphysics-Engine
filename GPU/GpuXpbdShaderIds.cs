@@ -90,6 +90,11 @@ public static class GpuXpbdShaderIds
         public static readonly int MeshCount = Shader.PropertyToID("meshCount");
 
 
+        // Friction
+        public static readonly int FrictionMuS = Shader.PropertyToID("mu_s");
+        public static readonly int FrictionMuK = Shader.PropertyToID("mu_k");
+
+
         // Attachment Constraints
         public static readonly int AttachmentObjects = Shader.PropertyToID("attachmentObjects");
         public static readonly int AttachmentObjectCount = Shader.PropertyToID("attachmentObjectCount");

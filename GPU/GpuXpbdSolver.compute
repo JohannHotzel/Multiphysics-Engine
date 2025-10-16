@@ -84,6 +84,9 @@ float omega;
 float vMax;
 float collisionMargin;
 
+float mu_s; // static friction (μ_s)
+float mu_k; // kinetic friction (μ_k)
+
 
 #define ATOMIC_ADD_FLOAT_UAV(UAV, IDX, VAL)                      \
 {                                                                \
@@ -477,37 +480,69 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
     if (p.w == 0.0f)
         return;
 
-    uint has = collisionCounts[i];
-    if (has == 0)
+    if (collisionCounts[i] == 0)
         return;
 
     CollisionConstraint cc = collisionConstraints[i];
+    float3 n = cc.normal;
 
-    float C = dot(p.positionX - cc.target, cc.normal) - cc.radius;
+    float C = dot(p.positionX - cc.target, n) - cc.radius;
+    
+    if (C >= 0.0f)
+        return;
+    
 
-    if (C < 0.0f)
+    float d0 = -C;
+    float bias = (vMax > 0.0f) ? max(d0 - vMax * dts, 0.0f) : 0.0f;
+    float phi = C + bias;
+    
+    if (phi >= 0.0f)
+        return;
+    
+
+    float3 dXn = -phi * n;
+    p.positionX += dXn;
+
+
+    float3 deltaMove = p.positionX - p.positionP;
+
+    float3 deltaN = dot(deltaMove, n) * n;
+    float3 deltaT = deltaMove - deltaN;
+    
+    float tLen = length(deltaT);
+    float d = length(dXn);
+
+    float3 dXf = 0;
+    if (tLen > 1e-12 && d > 0.0f)
     {
-        float d0 = -C;
-        float bias = (vMax > 0.0f) ? max(d0 - vMax * dts, 0.0f) : 0.0f;
-        float phi = C + bias;
+        float scale;
+        
+        if (tLen < mu_s * d)
+            scale = 1.0;
+        
+        else
+            scale = min((mu_k * d) / tLen, 1.0);
 
-        if (phi < 0.0f)
+        dXf = -scale * deltaT;
+        p.positionX += dXf;
+    }
+
+    // ---- Impulse-Event ----
+    if (cc.rbIndex >= 0)
+    {
+        //float3 dXtot = dXn + dXf;
+        float3 dXtot = dXn;
+        
+        if (any(dXtot != 0))
         {
-            float3 dX = -cc.normal * phi;
-            p.positionX += dX;
+            float3 J = (p.m * dXtot) / dts;
+            float3 contact = p.positionX - n * cc.radius;
 
-            if (cc.rbIndex >= 0)
-            {
-                float mi = p.m;
-                float3 J = (mi * dX) / dts;
-                float3 contact = p.positionX - cc.normal * cc.radius;
-
-                ImpulseEvent ev;
-                ev.rbIndex = cc.rbIndex;
-                ev.pointWS = contact;
-                ev.J = -J;
-                impulseEvents.Append(ev);
-            }
+            ImpulseEvent ev;
+            ev.rbIndex = cc.rbIndex;
+            ev.pointWS = contact;
+            ev.J = -J; 
+            impulseEvents.Append(ev);
         }
     }
 
