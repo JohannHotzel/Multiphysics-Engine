@@ -35,7 +35,6 @@ public sealed class GpuXpbdBufferSet
 
 
 
-
     // ---- Init / Teardown ----
     public void InitializeParticlesAndConstraints(GpuParticle[] particles, GpuDistanceConstraint[] constraints, GpuAttachmentObject[] attachObjs, GpuAttachmentConstraint[] attachCons, int substeps, float growFactor = 1.5f)
     {
@@ -304,6 +303,8 @@ public sealed class GpuXpbdBufferSet
         }
 
         buf = new ComputeBuffer(newCount, stride, type);
+
+        Debug.Log("[GpuXpbdBufferSet] Allocated ComputeBuffer of size " + newCount + " (stride " + stride + ", type " + type + ")");
     }
     public static void Release(ref ComputeBuffer buf)
     {
@@ -321,7 +322,7 @@ public sealed class GpuXpbdBufferSet
     }
     
     public void ResetImpulseEvents() => ImpulseEventBuffer?.SetCounterValue(0);
-    public int GetAppendCount(ComputeBuffer append)                              
+    public int GetAppendCount(ComputeBuffer append)
     {
         _appendCountScratch ??= new ComputeBuffer(1, sizeof(uint), ComputeBufferType.Raw);
         ComputeBuffer.CopyCount(append, _appendCountScratch, 0);

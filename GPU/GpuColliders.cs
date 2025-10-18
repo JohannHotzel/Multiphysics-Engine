@@ -1,13 +1,14 @@
+using System.Runtime.InteropServices;
 using UnityEngine;
 
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct GpuSphereCollider
 {
     public Vector3 center;
     public float radius;
     public int rbIndex;
-    
-    public const int Stride = sizeof(float) * 4 + sizeof(int); // 20
 
+    public static readonly int Stride = Marshal.SizeOf<GpuSphereCollider>();
     public GpuSphereCollider(Vector3 pos, float rad, int index)
     {
         center = pos;
@@ -16,15 +17,16 @@ public struct GpuSphereCollider
     }
 }
 
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct GpuCapsuleCollider
 {
     public Vector3 p0;
     public Vector3 p1;
     public float radius;
-    public int rbIndex;      
-    
-    public const int Stride = sizeof(float) * 7 + sizeof(int); // 32
+    public int rbIndex;
 
+    public static readonly int Stride = Marshal.SizeOf<GpuCapsuleCollider>();
     public GpuCapsuleCollider(Vector3 point0, Vector3 point1, float rad, int index)
     {
         p0 = point0;
@@ -34,6 +36,8 @@ public struct GpuCapsuleCollider
     }
 }
 
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct GpuBoxCollider
 {
     public Vector3 center;
@@ -41,10 +45,9 @@ public struct GpuBoxCollider
     public Vector3 axisUp;
     public Vector3 axisForward;
     public Vector3 halfExtents;
-    public int rbIndex;              
-    
-    public const int Stride = sizeof(float) * 3 * 5 + sizeof(int);  // 64
+    public int rbIndex;
 
+    public static readonly int Stride = Marshal.SizeOf<GpuBoxCollider>();
     public GpuBoxCollider(Vector3 c, Vector3 r, Vector3 u, Vector3 f, Vector3 he, int index)
     {
         center = c;
@@ -56,25 +59,28 @@ public struct GpuBoxCollider
     }
 }
 
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct GpuTriangle
 {
     public Vector3 a, b, c;
 
-    public const int Stride = sizeof(float) * 9; // 3 * float3
-
+    public static readonly int Stride = Marshal.SizeOf<GpuTriangle>();
     public GpuTriangle(Vector3 a, Vector3 b, Vector3 c)
     {
         this.a = a; this.b = b; this.c = c;
     }
 }
 
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct GpuMeshRange
 {
     public uint start;
     public uint count;
-    public int rbIndex;                  
-    public const int Stride = sizeof(uint) * 2 + sizeof(int); // 12
+    public int rbIndex;
 
+    public static readonly int Stride = Marshal.SizeOf<GpuMeshRange>();
     public GpuMeshRange(uint s, uint c, int index)
     {
         start = s;
@@ -86,14 +92,14 @@ public struct GpuMeshRange
 
 
 
-
-
 //Axis-Aligned Bounding Box Check
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct Aabb
 {
     public Vector3 mn;
     public Vector3 mx;
-    public const int Stride = sizeof(float) * 6; // float3 + float3
+
+    public static readonly int Stride = Marshal.SizeOf<Aabb>();
     public Aabb(Vector3 min, Vector3 max)
     {
         mn = min;
@@ -101,11 +107,13 @@ public struct Aabb
     }
 }
 //This will be later changed to a aggregat strure used for Softbodies and Cloths
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct ClothRange
 {
     public uint start;
     public uint count;
-    public const int Stride = sizeof(uint) * 2; // uint + uint
+
+    public static readonly int Stride = Marshal.SizeOf<ClothRange>();
     public ClothRange(uint s, uint c)
     {
         start = s;

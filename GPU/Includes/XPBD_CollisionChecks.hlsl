@@ -2,7 +2,7 @@
 #define XPBD_COLLISION_CHECKS_INCLUDED
 
 
-// === Sphere ===
+// ---- Sphere ----
 inline bool CollideSphere(float3 x, float pr, SphereCollider sc, out float3 target, out float3 n)
 {
     float3 d = x - sc.center;
@@ -19,7 +19,7 @@ inline bool CollideSphere(float3 x, float pr, SphereCollider sc, out float3 targ
     return true;
 }
 
-// === Capsule ===
+// ---- Capsule ----
 inline float3 ClosestPointOnSegment(float3 a, float3 b, float3 p)
 {
     float3 ab = b - a;
@@ -45,7 +45,7 @@ inline bool CollideCapsule(float3 x, float pr, CapsuleCollider c, out float3 tar
     return true;
 }
 
-// === Box ===
+// ---- Box ----
 inline float3 ClosestPointOnOBB(float3 p, BoxCollider b, out float3 normal, out float signedDist)
 {
     float3 d = p - b.center;
@@ -91,7 +91,7 @@ inline bool CollideBox(float3 x, float pr, BoxCollider b, out float3 target, out
     return (dist < pr + 1e-6f);
 }
 
-// === Triangle ===
+// ---- Triangle ----
 inline float3 ClosestPointOnTriangle(float3 p, float3 a, float3 b, float3 c)
 {
     float3 ab = b - a;

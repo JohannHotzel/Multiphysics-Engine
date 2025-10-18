@@ -4,7 +4,7 @@
 #define THREADS 256
 
 
-// === Core Simulation ===
+// ---- Core Simulation ----
 struct Particle
 {
 	float3 positionP;
@@ -25,7 +25,7 @@ struct DistanceConstraint
 };
 
 
-// === Cloth / Broadphase ===
+// ---- Cloth / Broadphase ----
 struct ClothRange
 {
 	uint start;
@@ -39,7 +39,7 @@ struct Aabb
 };
 
 
-// === Collision ===
+// ---- Collision ----
 struct CollisionConstraint
 {
 	float3 target;
@@ -95,7 +95,7 @@ struct MeshRange
 };
 
 
-// === Attachments ===
+// ---- Attachments ----
 struct AttachmentObject
 {
 	float4x4 world;

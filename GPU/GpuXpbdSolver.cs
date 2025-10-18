@@ -60,7 +60,6 @@ public class GpuXpbdSolver : MonoBehaviour
     private readonly List<Transform> _attachObjRefs = new();
     private readonly Dictionary<Transform, int> _objToIndex = new();
     private readonly List<GpuAttachmentConstraint> _attachConsCpu = new();
-
     #endregion
 
 
@@ -103,7 +102,7 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.SetFloat(Sid.CollisionMargin, collisionMargin);
 
         compute.SetFloat(Sid.FrictionMuS, staticFrictionMu);
-        compute.SetFloat(Sid.FrictionMuK, kineticFrictionMu);
+        compute.SetFloat(Sid.FrictionMuK, kineticFrictionMu); 
 
         int groupsP = Mathf.CeilToInt(Mathf.Max(1, buffers.ParticleCount) / (float)THREADS);
         int groupsC = Mathf.CeilToInt(Mathf.Max(1, buffers.ConstraintCount) / (float)THREADS);
@@ -142,11 +141,10 @@ public class GpuXpbdSolver : MonoBehaviour
             if (buffers.SphereBuffer != null) compute.Dispatch(Kid.BuildSphereConstraints, groupsP, 1, 1);
             if (buffers.CapsuleBuffer != null) compute.Dispatch(Kid.BuildCapsuleConstraints, groupsP, 1, 1);
             if (buffers.BoxBuffer != null) compute.Dispatch(Kid.BuildBoxConstraints, groupsP, 1, 1);
-            if (buffers.MeshTriangleBuffer != null) compute.Dispatch(Kid.BuildMeshConstraints, groupsP, 1, 1);
-
-            
+            if (buffers.MeshTriangleBuffer != null) compute.Dispatch(Kid.BuildMeshConstraints, groupsP, 1, 1);      
             compute.Dispatch(Kid.SolveCollisionConstraints, groupsP, 1, 1);
 
+            // Update velocities
             compute.Dispatch(Kid.UpdateVelocities, groupsP, 1, 1);
         }
 
@@ -412,6 +410,7 @@ public class GpuXpbdSolver : MonoBehaviour
         compute.Dispatch(Kid.HashFillEntries, groupsP, 1, 1);
     }
     #endregion
+
 
     #region === Rigid body coupling Helpers ===
     private void ApplyImpulseEventsToRigidbodies()

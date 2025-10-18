@@ -1,5 +1,7 @@
+using System.Runtime.InteropServices;
 using UnityEngine;
 
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct GpuParticle
 {
     public Vector3 positionP; // previous
@@ -10,7 +12,7 @@ public struct GpuParticle
     public float w;
     public float radius;
 
-    public const int Stride = 15 * sizeof(float); // float3*4 + float*3
+    public static readonly int Stride = Marshal.SizeOf<GpuParticle>();
 
     public GpuParticle(Vector3 pos, float mass, float rad)
     {
