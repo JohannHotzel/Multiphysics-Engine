@@ -265,8 +265,6 @@ public class GpuXpbdSolver : MonoBehaviour
             _aabbCpu = null;
         }
 
-        buffers.SetCountsOn(compute);
-
         Debug.Log($"[GpuXpbdSolver] Registered: {particleCount} particles, {constraintCount} constraints, " +
                   $"{buffers.AttachmentConstraintCount} attachments on {buffers.AttachmentObjectCount} objects.");
     }

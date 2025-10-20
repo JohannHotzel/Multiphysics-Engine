@@ -116,11 +116,15 @@ public sealed class GpuXpbdBufferSet
         if (ParticleBuffer == null) return;
         for (int i = 0; i < kernels.Length; i++)
             cs.SetBuffer(kernels[i], Sid.Particles, ParticleBuffer);
+
+        cs.SetInt(Sid.ParticleCount, ParticleCount);
     }
     public void BindDistanceSolve(ComputeShader cs, int solveDistanceKernel)
     {
         if (ConstraintBuffer != null)
             cs.SetBuffer(solveDistanceKernel, Sid.Constraints, ConstraintBuffer);
+
+        cs.SetInt(Sid.ConstraintCount, ConstraintCount);
     }
     public void BindCollisionCore(ComputeShader cs, int solveKernel, int resetKernel, params int[] buildKernels)
     {
@@ -230,11 +234,6 @@ public sealed class GpuXpbdBufferSet
         ZeroUInt(ref DeltaYBuffer, ParticleCount);
         ZeroUInt(ref DeltaZBuffer, ParticleCount);
         ZeroUInt(ref CountBuffer, ParticleCount);
-    }
-    public void SetCountsOn(ComputeShader cs)
-    {
-        cs.SetInt(Sid.ParticleCount, ParticleCount);
-        cs.SetInt(Sid.ConstraintCount, ConstraintCount);
     }
 
 
