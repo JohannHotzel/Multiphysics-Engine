@@ -1,7 +1,7 @@
 #ifndef XPBD_TYPES_INCLUDED
 #define XPBD_TYPES_INCLUDED
 
-#define THREADS 256
+
 
 
 // ---- Core Simulation ----

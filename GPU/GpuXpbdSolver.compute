@@ -29,31 +29,23 @@
 #include "Includes/XPBD_Types.hlsl"
 #include "Includes/XPBD_CollisionChecks.hlsl"
 
+#define THREADS 256
+
 // Particles
-RWStructuredBuffer<Particle> particles;
-int particleCount;
+RWStructuredBuffer<Particle> particles; int particleCount;
 
 // Distance Constraints
-StructuredBuffer<DistanceConstraint> constraints;
-int constraintCount;
+StructuredBuffer<DistanceConstraint> constraints; int constraintCount;
 
 // Cloth / Broadphase
 StructuredBuffer<ClothRange> clothRanges;
 RWStructuredBuffer<Aabb> clothAabbs;
 
 // Colliders
-StructuredBuffer<SphereCollider> spheres;
-int sphereCount;
-
-StructuredBuffer<CapsuleCollider> capsules;
-int capsuleCount;
-
-StructuredBuffer<BoxCollider> boxes;
-int boxCount;
-
-StructuredBuffer<Triangle> meshTriangles;
-StructuredBuffer<MeshRange> meshRanges;
-int meshCount;
+StructuredBuffer<SphereCollider> spheres; int sphereCount;
+StructuredBuffer<CapsuleCollider> capsules;int capsuleCount;
+StructuredBuffer<BoxCollider> boxes; int boxCount;
+StructuredBuffer<Triangle> meshTriangles; StructuredBuffer<MeshRange> meshRanges; int meshCount;
 
 // Collision constraints
 RWStructuredBuffer<CollisionConstraint> collisionConstraints;
@@ -61,10 +53,8 @@ RWStructuredBuffer<uint> collisionCounts;
 AppendStructuredBuffer<ImpulseEvent> impulseEvents;
 
 // Attachment constraints
-StructuredBuffer<AttachmentObject> attachmentObjects;
-int attachmentObjectCount;
-StructuredBuffer<AttachmentConstraint> attachmentConstraints;
-int attachmentConstraintCount;
+StructuredBuffer<AttachmentObject> attachmentObjects; int attachmentObjectCount;
+StructuredBuffer<AttachmentConstraint> attachmentConstraints; int attachmentConstraintCount;
 
 // Spatial Hashing
 RWStructuredBuffer<uint> hashCellStarts; 
@@ -86,6 +76,11 @@ float collisionMargin;
 
 float mu_s; // static friction (μ_s)
 float mu_k; // kinetic friction (μ_k)
+
+// Small epsilon value
+static const float EPS = 1e-6f;
+static const float BIG_POS = +3.4e38f;
+static const float BIG_NEG = -3.4e38f;
 
 
 #define ATOMIC_ADD_FLOAT_UAV(UAV, IDX, VAL)                      \
@@ -163,7 +158,7 @@ void SolveDistanceJacobi(uint3 tid : SV_DispatchThreadID)
     float3 d = pi.positionX - pj.positionX;
     float len = length(d);
     
-    if (len <= 1e-6f)
+    if (len <= EPS)
         return;
 
     float3 n = d / len;
@@ -250,8 +245,8 @@ void BuildClothAabbs(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    float3 mn = float3(+3.4e38f, +3.4e38f, +3.4e38f);
-    float3 mx = float3(-3.4e38f, -3.4e38f, -3.4e38f);
+    float3 mn = float3(BIG_POS, BIG_POS, BIG_POS);
+    float3 mx = float3(BIG_NEG, BIG_NEG, BIG_NEG);
 
     [loop]
     for (uint i = 0; i < count; i++)
@@ -513,7 +508,7 @@ void SolveCollisionConstraints(uint3 id : SV_DispatchThreadID)
     float d = length(dXn);
 
     float3 dXf = 0;
-    if (tLen > 1e-12 && d > 0.0f)
+    if (tLen > EPS && d > EPS)
     {
         float scale;
         
@@ -672,8 +667,8 @@ void SolveParticleCollisionsHashed(uint3 id : SV_DispatchThreadID)
                     if (dist2 >= minDist2)
                         continue;
 
-                    float dist = sqrt(max(dist2, 1e-12));
-                    float3 n = (dist > 1e-6) ? (d / dist) : float3(1, 0, 0);
+                    float dist = sqrt(max(dist2, EPS));
+                    float3 n = (dist > EPS) ? (d / dist) : float3(1, 0, 0);
                     float pen = minDist - dist;
 
                     float wi = pi.w, wj = pj.w, wt = wi + wj;
