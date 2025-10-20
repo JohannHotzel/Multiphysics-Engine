@@ -305,7 +305,7 @@ public sealed class GpuXpbdBufferSet
 
         buf = new ComputeBuffer(newCount, stride, type);
 
-        Debug.Log("[GpuXpbdBufferSet] Allocated ComputeBuffer of size " + newCount + " (stride " + stride + ", type " + type + ")");
+        //Debug.Log("[GpuXpbdBufferSet] Allocated ComputeBuffer of size " + newCount + " (stride " + stride + ", type " + type + ")");
     }
     public static void Release(ref ComputeBuffer buf)
     {
