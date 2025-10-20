@@ -78,7 +78,9 @@ public class GpuXpbdSolver : MonoBehaviour
 
         RegisterAllCloths();
         BuildInitialAttachments();
+
         InitializeBuffers();
+        BindAllBuffers();
     }
 
     private void OnDisable() => buffers?.ReleaseAll();
@@ -227,14 +229,14 @@ public class GpuXpbdSolver : MonoBehaviour
     {
         buffers.ReleaseAll();
 
-        var allParticles = allParticlesList.ToArray();
-        var allConstraints = allConstraintsList.ToArray();
+        var particles = allParticlesList.ToArray();
+        var constraints = allConstraintsList.ToArray();
 
         var attachObjs = _attachObjsCpu.Count > 0 ? _attachObjsCpu.ToArray() : null;
         var attachCons = _attachConsCpu.Count > 0 ? _attachConsCpu.ToArray() : null;
 
-        particleCount = allParticles.Length;
-        constraintCount = allConstraints.Length;
+        particleCount = particles.Length;
+        constraintCount = constraints.Length;
 
         if (particleCount == 0)
         {
@@ -242,49 +244,61 @@ public class GpuXpbdSolver : MonoBehaviour
             return;
         }
 
-        // Core init
-        buffers.InitializeParticlesAndConstraints(allParticles, allConstraints, attachObjs, attachCons, substeps, bufferGrowFactor);
+        buffers.InitializeParticles(particles, bufferGrowFactor);
+        buffers.InitializeConstraints(constraints, bufferGrowFactor);
+        buffers.InitializeAccumulators(particleCount);
+        buffers.InitializeCollisionStorage(particleCount, substeps, bufferGrowFactor);
+        buffers.InitializeAttachments(attachObjs, attachCons, bufferGrowFactor);
+        buffers.InitializeHash(compute, particleCount, particleRadiusSim, bufferGrowFactor);
+
+        if (cloths.Count > 0)
+        {
+            var ranges = new ClothRange[cloths.Count];
+            for (int c = 0; c < cloths.Count; c++)
+                ranges[c] = new ClothRange { start = (uint)cloths[c].startIndex, count = (uint)cloths[c].count };
+
+            buffers.InitializeCloth(ranges);
+            _aabbCpu = new Aabb[cloths.Count];
+        }
+        else
+        {
+            _aabbCpu = null;
+        }
+
         buffers.SetCountsOn(compute);
 
-
+        Debug.Log($"[GpuXpbdSolver] Registered: {particleCount} particles, {constraintCount} constraints, " +
+                  $"{buffers.AttachmentConstraintCount} attachments on {buffers.AttachmentObjectCount} objects.");
+    }
+    private void BindAllBuffers()
+    {
+        // Particles
         buffers.BindParticlesTo(compute,
             Kid.Predict, Kid.Integrate, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.UpdateVelocities,
             Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints,
             Kid.SolveCollisionConstraints, Kid.SetAttachmentPositions, Kid.HashCountCells, Kid.HashFillEntries, Kid.SolveParticleCollisionsHashed
         );
 
+        // Distance constraints
         buffers.BindDistanceSolve(compute, Kid.SolveDistanceJacobi);
 
-        buffers.BindCollisionCore(compute, Kid.SolveCollisionConstraints, Kid.ResetCollisionCounts, Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints);
-
-        buffers.BindAttachments(compute, Kid.SetAttachmentPositions);
-
+        // Deltas
         buffers.BindDeltasTo(compute, Kid.SolveDistanceJacobi, Kid.ApplyDeltas, Kid.SolveParticleCollisionsHashed);
 
-        buffers.InitializeHash(compute, particleCount, particleRadiusSim, bufferGrowFactor);
+        // Collision core
+        buffers.BindCollisionCore(compute, Kid.SolveCollisionConstraints, Kid.ResetCollisionCounts,
+            Kid.BuildSphereConstraints, Kid.BuildCapsuleConstraints, Kid.BuildBoxConstraints, Kid.BuildMeshConstraints);
+
+        // Attachments
+        buffers.BindAttachments(compute, Kid.SetAttachmentPositions);
+
+        // Hash
         buffers.BindHashTo(compute, Kid.HashClearCounts, Kid.HashCountCells, Kid.HashFillEntries, Kid.SolveParticleCollisionsHashed);
 
-
-        // Cloth
-        if (cloths.Count > 0)
-        {
-            var ranges = new ClothRange[cloths.Count];
-            for (int c = 0; c < cloths.Count; c++)
-            {
-                ranges[c] = new ClothRange
-                {
-                    start = (uint)cloths[c].startIndex,
-                    count = (uint)cloths[c].count
-                };
-            }
-
-            buffers.InitializeCloth(ranges, compute, Kid.BuildClothAabbs);
-            _aabbCpu = new Aabb[cloths.Count];
-        }
-
-
-        Debug.Log($"[GpuXpbdSolver] Registered: {particleCount} particles, {constraintCount} constraints, " + $"{buffers.AttachmentConstraintCount} attachments on {buffers.AttachmentObjectCount} objects.");
+        // Cloth-AABBs
+        buffers.BindCloth(compute, Kid.BuildClothAabbs);
     }
+
     #endregion
 
 

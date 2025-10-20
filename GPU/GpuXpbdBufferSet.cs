@@ -36,72 +36,64 @@ public sealed class GpuXpbdBufferSet
 
 
     // ---- Init / Teardown ----
-    public void InitializeParticlesAndConstraints(GpuParticle[] particles, GpuDistanceConstraint[] constraints, GpuAttachmentObject[] attachObjs, GpuAttachmentConstraint[] attachCons, int substeps, float growFactor = 1.5f)
+    public void InitializeParticles(GpuParticle[] particles, float growFactor = 1.5f)
     {
         ParticleCount = particles?.Length ?? 0;
-        ConstraintCount = constraints?.Length ?? 0;
-
-        if (ParticleCount <= 0)
-            return;
-
-        // Particles
+        if (ParticleCount <= 0) return;
         Ensure(ref ParticleBuffer, ParticleCount, GpuParticle.Stride, ComputeBufferType.Structured, growFactor);
         ParticleBuffer.SetData(particles);
-
-        // Constraints
-        if (ConstraintCount > 0)
-        {
-            Ensure(ref ConstraintBuffer, ConstraintCount, GpuDistanceConstraint.Stride, ComputeBufferType.Structured, growFactor);
-            ConstraintBuffer.SetData(constraints);
-        }
-
-        // Accumulators
-        Ensure(ref DeltaXBuffer, ParticleCount, sizeof(uint));
-        Ensure(ref DeltaYBuffer, ParticleCount, sizeof(uint));
-        Ensure(ref DeltaZBuffer, ParticleCount, sizeof(uint));
-        Ensure(ref CountBuffer, ParticleCount, sizeof(uint));
+    }
+    public void InitializeConstraints(GpuDistanceConstraint[] constraints, float growFactor = 1.5f)
+    {
+        ConstraintCount = constraints?.Length ?? 0;
+        if (ConstraintCount <= 0) return;
+        Ensure(ref ConstraintBuffer, ConstraintCount, GpuDistanceConstraint.Stride, ComputeBufferType.Structured, growFactor);
+        ConstraintBuffer.SetData(constraints);
+    }
+    public void InitializeAccumulators(int particleCount)
+    {
+        if (particleCount <= 0) return;
+        Ensure(ref DeltaXBuffer, particleCount, sizeof(uint));
+        Ensure(ref DeltaYBuffer, particleCount, sizeof(uint));
+        Ensure(ref DeltaZBuffer, particleCount, sizeof(uint));
+        Ensure(ref CountBuffer, particleCount, sizeof(uint));
         ZeroAccumulators();
+    }
+    public void InitializeCollisionStorage(int particleCount, int substeps, float growFactor = 1.5f)
+    {
+        if (particleCount <= 0) return;
 
-        // Collision constraints (per particle)
-        int colCap = Mathf.Max(1, ParticleCount);
-        Ensure(ref CollisionConstraintBuffer, colCap, GpuCollisionConstraint.Stride);
-        Ensure(ref CollisionCountBuffer, ParticleCount, sizeof(uint));
-        ZeroUInt(ref CollisionCountBuffer, ParticleCount);
+        int colCap = Mathf.Max(1, particleCount);
+        Ensure(ref CollisionConstraintBuffer, colCap, GpuCollisionConstraint.Stride, ComputeBufferType.Structured, growFactor);
+        Ensure(ref CollisionCountBuffer, particleCount, sizeof(uint), ComputeBufferType.Structured, growFactor);
+        ZeroUInt(ref CollisionCountBuffer, particleCount);
 
-        // Impulse events (append buffer)
-        int evtCap = Mathf.Max(1, ParticleCount * substeps);
+        int evtCap = Mathf.Max(1, particleCount * substeps);
         Ensure(ref ImpulseEventBuffer, evtCap, GpuImpulseEvent.Stride, ComputeBufferType.Append);
         ImpulseEventBuffer.SetCounterValue(0);
-
-        // Attachments
-        AttachmentObjectCount = attachObjs?.Length ?? 0;
-        AttachmentConstraintCount = attachCons?.Length ?? 0;
+    }
+    public void InitializeAttachments(GpuAttachmentObject[] objs, GpuAttachmentConstraint[] cons, float growFactor = 1.5f)
+    {
+        AttachmentObjectCount = objs?.Length ?? 0;
+        AttachmentConstraintCount = cons?.Length ?? 0;
 
         if (AttachmentObjectCount > 0)
         {
             Ensure(ref AttachmentObjectsBuffer, AttachmentObjectCount, GpuAttachmentObject.Stride, ComputeBufferType.Structured, growFactor);
-            AttachmentObjectsBuffer.SetData(attachObjs);
+            AttachmentObjectsBuffer.SetData(objs);
         }
         if (AttachmentConstraintCount > 0)
         {
             Ensure(ref AttachmentConstraintsBuffer, AttachmentConstraintCount, GpuAttachmentConstraint.Stride, ComputeBufferType.Structured, growFactor);
-            AttachmentConstraintsBuffer.SetData(attachCons);
+            AttachmentConstraintsBuffer.SetData(cons);
         }
-
-
     }
-    public void InitializeCloth(ClothRange[] ranges, ComputeShader cs, int buildClothAabbsKernel)
+    public void InitializeCloth(ClothRange[] ranges)
     {
         if (ranges == null || ranges.Length == 0) return;
-
         Ensure(ref ClothRangesBuffer, ranges.Length, ClothRange.Stride);
         ClothRangesBuffer.SetData(ranges);
-
         Ensure(ref ClothAabbsBuffer, ranges.Length, Aabb.Stride);
-        // Bind für BuildClothAabbs
-        cs.SetBuffer(buildClothAabbsKernel, Sid.Particles, ParticleBuffer);
-        cs.SetBuffer(buildClothAabbsKernel, Sid.ClothRanges, ClothRangesBuffer);
-        cs.SetBuffer(buildClothAabbsKernel, Sid.ClothAabbs, ClothAabbsBuffer);
     }
     public void InitializeHash(ComputeShader cs, int particleCount, float particleRadius, float growFactor = 1.5f)
     {
@@ -110,62 +102,11 @@ public sealed class GpuXpbdBufferSet
         HashSpacing = 2f * particleRadius;
         HashTableSize = Mathf.NextPowerOfTwo((int)(particleCount * 1.5f));
 
-        Ensure(ref HashCellStarts, HashTableSize + 1, sizeof(uint));
-        Ensure(ref HashCellEntries, particleCount, sizeof(uint));
+        Ensure(ref HashCellStarts, HashTableSize + 1, sizeof(uint), ComputeBufferType.Structured, growFactor);
+        Ensure(ref HashCellEntries, particleCount, sizeof(uint), ComputeBufferType.Structured, growFactor);
 
         cs.SetInt(Sid.HashTableSize, HashTableSize);
         cs.SetFloat(Sid.HashSpacing, HashSpacing);
-    }
-    public void ReleaseAll()
-    {
-        Release(ref ParticleBuffer);
-        Release(ref ConstraintBuffer);
-        Release(ref DeltaXBuffer);
-        Release(ref DeltaYBuffer);
-        Release(ref DeltaZBuffer);
-        Release(ref CountBuffer);
-
-        Release(ref CollisionConstraintBuffer);
-        Release(ref CollisionCountBuffer);
-        Release(ref ImpulseEventBuffer);
-        Release(ref _appendCountScratch);
-        Release(ref SphereBuffer);
-        Release(ref CapsuleBuffer);
-        Release(ref BoxBuffer);
-        Release(ref MeshTriangleBuffer);
-        Release(ref MeshRangeBuffer);
-
-        Release(ref ClothRangesBuffer);
-        Release(ref ClothAabbsBuffer);
-
-        Release(ref AttachmentObjectsBuffer);
-        Release(ref AttachmentConstraintsBuffer);
-
-        Release(ref HashCellStarts);
-        Release(ref HashCellEntries);
-
-
-        AttachmentObjectCount = 0;
-        AttachmentConstraintCount = 0;
-
-        ParticleCount = 0;
-        ConstraintCount = 0;
-    }
-
-
-    // ---- Zero / Counts ----
-    public void ZeroAccumulators()
-    {
-        if (ParticleCount <= 0) return;
-        ZeroUInt(ref DeltaXBuffer, ParticleCount);
-        ZeroUInt(ref DeltaYBuffer, ParticleCount);
-        ZeroUInt(ref DeltaZBuffer, ParticleCount);
-        ZeroUInt(ref CountBuffer, ParticleCount);
-    }
-    public void SetCountsOn(ComputeShader cs)
-    {
-        cs.SetInt(Sid.ParticleCount, ParticleCount);
-        cs.SetInt(Sid.ConstraintCount, ConstraintCount);
     }
 
 
@@ -230,9 +171,70 @@ public sealed class GpuXpbdBufferSet
 
         foreach (var k in kernels)
         {
-            cs.SetBuffer(k, GpuXpbdShaderIds.Sid.HashCellStarts, HashCellStarts);
-            cs.SetBuffer(k, GpuXpbdShaderIds.Sid.HashCellEntries, HashCellEntries);
+            cs.SetBuffer(k, Sid.HashCellStarts, HashCellStarts);
+            cs.SetBuffer(k, Sid.HashCellEntries, HashCellEntries);
         }
+    }
+    public void BindCloth(ComputeShader cs, int buildClothAabbsKernel)
+    {
+        if (ClothRangesBuffer == null || ClothAabbsBuffer == null || ParticleBuffer == null) return;
+        cs.SetBuffer(buildClothAabbsKernel, Sid.Particles, ParticleBuffer);
+        cs.SetBuffer(buildClothAabbsKernel, Sid.ClothRanges, ClothRangesBuffer);
+        cs.SetBuffer(buildClothAabbsKernel, Sid.ClothAabbs, ClothAabbsBuffer);
+    }
+
+
+    // ---- Release ----
+    public void ReleaseAll()
+    {
+        Release(ref ParticleBuffer);
+        Release(ref ConstraintBuffer);
+        Release(ref DeltaXBuffer);
+        Release(ref DeltaYBuffer);
+        Release(ref DeltaZBuffer);
+        Release(ref CountBuffer);
+
+        Release(ref CollisionConstraintBuffer);
+        Release(ref CollisionCountBuffer);
+        Release(ref ImpulseEventBuffer);
+        Release(ref _appendCountScratch);
+        Release(ref SphereBuffer);
+        Release(ref CapsuleBuffer);
+        Release(ref BoxBuffer);
+        Release(ref MeshTriangleBuffer);
+        Release(ref MeshRangeBuffer);
+
+        Release(ref ClothRangesBuffer);
+        Release(ref ClothAabbsBuffer);
+
+        Release(ref AttachmentObjectsBuffer);
+        Release(ref AttachmentConstraintsBuffer);
+
+        Release(ref HashCellStarts);
+        Release(ref HashCellEntries);
+
+
+        AttachmentObjectCount = 0;
+        AttachmentConstraintCount = 0;
+
+        ParticleCount = 0;
+        ConstraintCount = 0;
+    }
+
+
+    // ---- Zero / Counts ----
+    public void ZeroAccumulators()
+    {
+        if (ParticleCount <= 0) return;
+        ZeroUInt(ref DeltaXBuffer, ParticleCount);
+        ZeroUInt(ref DeltaYBuffer, ParticleCount);
+        ZeroUInt(ref DeltaZBuffer, ParticleCount);
+        ZeroUInt(ref CountBuffer, ParticleCount);
+    }
+    public void SetCountsOn(ComputeShader cs)
+    {
+        cs.SetInt(Sid.ParticleCount, ParticleCount);
+        cs.SetInt(Sid.ConstraintCount, ConstraintCount);
     }
 
 
