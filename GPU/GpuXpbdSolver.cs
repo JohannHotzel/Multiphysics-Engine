@@ -189,6 +189,8 @@ public class GpuXpbdSolver : MonoBehaviour
                 ));
             }
 
+
+            c.InitRenderer(this);
             runningOffset += particles.Length;
         }
     }

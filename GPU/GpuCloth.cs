@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class GpuCloth : MonoBehaviour
 {
@@ -24,9 +25,16 @@ public class GpuCloth : MonoBehaviour
     [Header("Pinning")]
     public bool pinTopRow = true;
 
+    // ---- Rendering ---- 
 
+    [Header("Rendering")]
+    public Material material;
+    public Color baseColor = Color.white;
 
-
+    private Mesh _mesh;
+    private MaterialPropertyBlock _mpb;
+    private GpuXpbdSolver _solver;    
+    private bool _meshBuilt;
 
     [HideInInspector] public int startIndex;  
     [HideInInspector] public int count;      
@@ -34,16 +42,8 @@ public class GpuCloth : MonoBehaviour
     [HideInInspector] public Vector3 aabbMin = Vector3.positiveInfinity;
     [HideInInspector] public Vector3 aabbMax = Vector3.negativeInfinity;
 
-    public Bounds CurrentBounds
-    {
-        get
-        {
-            if (float.IsInfinity(aabbMin.x) || float.IsInfinity(aabbMax.x))
-                return new Bounds(transform.position, Vector3.zero);
-            return new Bounds((aabbMin + aabbMax) * 0.5f, aabbMax - aabbMin);
-        }
-    }
 
+    #region === Builder ===
     public void Build(out GpuParticle[] particles, out GpuDistanceConstraint[] constraints, float radius)
     {
         int nX = Mathf.Max(1, numParticlesX);
@@ -113,8 +113,108 @@ public class GpuCloth : MonoBehaviour
 
         constraints = cons.ToArray();
     }
+    #endregion
+
+    #region === Rendering ===
+    public void InitRenderer(GpuXpbdSolver solver)
+    {
+        _solver = solver;
+        _mpb ??= new MaterialPropertyBlock();
+        BuildMesh();
+    }
+    void BuildMesh()
+    {
+        if (_meshBuilt) return;
+
+        BuildRenderTopology(out var tris, out var uvs);
+
+        int vCount = Mathf.Max(1, count);
+        _mesh = new Mesh();
+        _mesh.indexFormat = (vCount > 65535)
+            ? UnityEngine.Rendering.IndexFormat.UInt32
+            : UnityEngine.Rendering.IndexFormat.UInt16;
+
+        _mesh.SetVertices(new Vector3[vCount]); // Dummy
+        _mesh.SetUVs(0, uvs);
+        _mesh.SetIndices(tris, MeshTopology.Triangles, 0, false);
+        _mesh.RecalculateBounds();
+
+        _meshBuilt = true;
+    }
+    void BuildRenderTopology(out int[] triangles, out Vector2[] uvs)
+    {
+        int nX = Mathf.Max(1, numParticlesX);
+        int nY = Mathf.Max(1, numParticlesY);
+        int vCount = nX * nY;
+
+        uvs = new Vector2[vCount];
+        for (int y = 0; y < nY; y++)
+        {
+            float v = (nY > 1) ? (float)y / (nY - 1) : 0f;
+            for (int x = 0; x < nX; x++)
+            {
+                float u = (nX > 1) ? (float)x / (nX - 1) : 0f;
+                uvs[y * nX + x] = new Vector2(u, v);
+            }
+        }
+
+        if (nX < 2 || nY < 2) { triangles = System.Array.Empty<int>(); return; }
+
+        int quadsX = nX - 1, quadsY = nY - 1;
+        triangles = new int[quadsX * quadsY * 6];
+        int t = 0;
+        for (int y = 0; y < quadsY; y++)
+            for (int x = 0; x < quadsX; x++)
+            {
+                int i0 = y * nX + x;
+                int i1 = i0 + 1;
+                int i2 = i0 + nX;
+                int i3 = i2 + 1;
+
+                triangles[t++] = i0; triangles[t++] = i2; triangles[t++] = i1;
+                triangles[t++] = i1; triangles[t++] = i2; triangles[t++] = i3;
+            }
+    }
+    void LateUpdate()
+    {
+        if (!_meshBuilt || _solver == null || material == null) return;
+        var buffers = _solver.Buffers;
+        if (buffers == null || buffers.ParticleBuffer == null || count <= 0) return;
+
+        // Material & MPB
+        material.SetBuffer("_Particles", buffers.ParticleBuffer);
+        material.SetColor("_BaseColor", baseColor);
+        material.SetFloat("_Cull", 0f);
+
+        _mpb.SetInt("_StartIndex", startIndex);
+        _mpb.SetInt("_HasNormals", 0);
+
+        Graphics.DrawMesh(
+            _mesh,
+            Matrix4x4.identity,
+            material,
+            gameObject.layer,
+            null,
+            0,
+            _mpb,
+            true,   
+            true,                 
+            false                  
+        );
+    }
+
+    #endregion
 
 
+    public Bounds CurrentBounds
+    {
+        get
+        {
+            if (float.IsInfinity(aabbMin.x) || float.IsInfinity(aabbMax.x))
+                return new Bounds(transform.position, Vector3.zero);
+            return new Bounds((aabbMin + aabbMax) * 0.5f, aabbMax - aabbMin);
+        }
+    }
     private void OnDrawGizmos()
     {
         Vector3 size = new Vector3(width, height, 0.01f);
@@ -131,7 +231,6 @@ public class GpuCloth : MonoBehaviour
             Gizmos.DrawWireCube(b.center, b.size);
         }
     }
-
     private void OnDrawGizmosSelected()
     {
         Vector3 size = new Vector3(width, height, 0.01f);
@@ -147,4 +246,5 @@ public class GpuCloth : MonoBehaviour
             Gizmos.DrawCube(b.center, b.size);
         }
     }
+
 }
