@@ -29,7 +29,6 @@ public class GpuCloth : MonoBehaviour
 
     [Header("Rendering")]
     public Material material;
-    public Color baseColor = Color.white;
 
     private Mesh _mesh;
     private MaterialPropertyBlock _mpb;
@@ -181,13 +180,11 @@ public class GpuCloth : MonoBehaviour
         var buffers = _solver.Buffers;
         if (buffers == null || buffers.ParticleBuffer == null || count <= 0) return;
 
-        // Material & MPB
         material.SetBuffer("_Particles", buffers.ParticleBuffer);
-        material.SetColor("_BaseColor", baseColor);
-        material.SetFloat("_Cull", 0f);
 
         _mpb.SetInt("_StartIndex", startIndex);
-        _mpb.SetInt("_HasNormals", 0);
+        _mpb.SetInt("_GridSizeX", numParticlesX);
+        _mpb.SetInt("_GridSizeY", numParticlesY);
 
         Graphics.DrawMesh(
             _mesh,
@@ -197,9 +194,9 @@ public class GpuCloth : MonoBehaviour
             null,
             0,
             _mpb,
-            true,   
-            true,                 
-            false                  
+            true,  // cast shadows
+            true,  // receive shadows (URP Forward)
+            false
         );
     }
 
