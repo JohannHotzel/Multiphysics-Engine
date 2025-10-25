@@ -29,6 +29,7 @@ public class GpuCloth : MonoBehaviour
 
     [Header("Rendering")]
     public Material material;
+    public bool renderCloth = true;
 
     private Mesh _mesh;
     private MaterialPropertyBlock _mpb;
@@ -176,7 +177,7 @@ public class GpuCloth : MonoBehaviour
     }
     void LateUpdate()
     {
-        if (!_meshBuilt || _solver == null || material == null) return;
+        if (!_meshBuilt || _solver == null || material == null || !renderCloth) return;
         var buffers = _solver.Buffers;
         if (buffers == null || buffers.ParticleBuffer == null || count <= 0) return;
 
