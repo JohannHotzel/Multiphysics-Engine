@@ -30,8 +30,8 @@ public sealed class GpuXpbdBufferSet
     // ---- Attachment Buffers ----
     public ComputeBuffer AttachmentObjectsBuffer, AttachmentConstraintsBuffer;
 
-    // ---- Cloth/Broadphase ----
-    public ComputeBuffer ClothRangesBuffer, ClothAabbsBuffer;
+    // ---- Aggregates/Broadphase ----
+    public ComputeBuffer AggregateRangesBuffer, AggregateAabbsBuffer;
 
 
 
@@ -88,13 +88,6 @@ public sealed class GpuXpbdBufferSet
             AttachmentConstraintsBuffer.SetData(cons);
         }
     }
-    public void InitializeCloth(ClothRange[] ranges)
-    {
-        if (ranges == null || ranges.Length == 0) return;
-        Ensure(ref ClothRangesBuffer, ranges.Length, ClothRange.Stride);
-        ClothRangesBuffer.SetData(ranges);
-        Ensure(ref ClothAabbsBuffer, ranges.Length, Aabb.Stride);
-    }
     public void InitializeHash(ComputeShader cs, int particleCount, float particleRadius, float growFactor = 1.5f)
     {
         if (particleCount <= 0) return;
@@ -107,6 +100,13 @@ public sealed class GpuXpbdBufferSet
 
         cs.SetInt(Sid.HashTableSize, HashTableSize);
         cs.SetFloat(Sid.HashSpacing, HashSpacing);
+    }
+    public void InitializeAggregates(AggregateRange[] ranges)
+    {
+        if (ranges == null || ranges.Length == 0) return;
+        Ensure(ref AggregateRangesBuffer, ranges.Length, AggregateRange.Stride);
+        AggregateRangesBuffer.SetData(ranges);
+        Ensure(ref AggregateAabbsBuffer, ranges.Length, Aabb.Stride);
     }
 
 
@@ -179,12 +179,12 @@ public sealed class GpuXpbdBufferSet
             cs.SetBuffer(k, Sid.HashCellEntries, HashCellEntries);
         }
     }
-    public void BindCloth(ComputeShader cs, int buildClothAabbsKernel)
+    public void BindAggregates(ComputeShader cs, int buildAabbsKernel)
     {
-        if (ClothRangesBuffer == null || ClothAabbsBuffer == null || ParticleBuffer == null) return;
-        cs.SetBuffer(buildClothAabbsKernel, Sid.Particles, ParticleBuffer);
-        cs.SetBuffer(buildClothAabbsKernel, Sid.ClothRanges, ClothRangesBuffer);
-        cs.SetBuffer(buildClothAabbsKernel, Sid.ClothAabbs, ClothAabbsBuffer);
+        if (AggregateRangesBuffer == null || AggregateAabbsBuffer == null || ParticleBuffer == null) return;
+        cs.SetBuffer(buildAabbsKernel, Sid.Particles, ParticleBuffer);
+        cs.SetBuffer(buildAabbsKernel, Sid.AggregateRanges, AggregateRangesBuffer);
+        cs.SetBuffer(buildAabbsKernel, Sid.AggregateAabbs, AggregateAabbsBuffer);
     }
 
 
@@ -208,8 +208,8 @@ public sealed class GpuXpbdBufferSet
         Release(ref MeshTriangleBuffer);
         Release(ref MeshRangeBuffer);
 
-        Release(ref ClothRangesBuffer);
-        Release(ref ClothAabbsBuffer);
+        Release(ref AggregateRangesBuffer);
+        Release(ref AggregateAabbsBuffer);
 
         Release(ref AttachmentObjectsBuffer);
         Release(ref AttachmentConstraintsBuffer);

@@ -39,7 +39,7 @@ public class GpuXpbdSolver : MonoBehaviour
     private GpuXpbdBufferSet buffers;
     public GpuXpbdBufferSet Buffers => buffers;
 
-    private readonly List<GpuCloth> cloths = new();
+    private readonly List<GpuMassAggregate> aggregates = new();
     private readonly List<GpuParticle> allParticlesList = new();
     private readonly List<GpuDistanceConstraint> allConstraintsList = new();
 
@@ -76,7 +76,7 @@ public class GpuXpbdSolver : MonoBehaviour
         Kid.Init(compute);
         buffers = new GpuXpbdBufferSet();
 
-        RegisterAllCloths();
+        RegisterAllAggregates();
         BuildInitialAttachments();
 
         InitializeBuffers();
@@ -112,7 +112,7 @@ public class GpuXpbdSolver : MonoBehaviour
 
         // Collision broadphase
         compute.Dispatch(Kid.Predict, groupsP, 1, 1);
-        UpdateClothBoundsGPUGetData();
+        UpdateAggregateBoundsGPUGetData();
         GetBoundOverlaps();
         UpdateCollisionBuffers();
 
@@ -159,22 +159,22 @@ public class GpuXpbdSolver : MonoBehaviour
 
 
     #region === Initialization ===
-    private void RegisterAllCloths()
+    private void RegisterAllAggregates()
     {
-        cloths.Clear();
+        aggregates.Clear();
         allParticlesList.Clear();
         allConstraintsList.Clear();
 
-        var found = FindObjectsByType<GpuCloth>(FindObjectsSortMode.None);
-        cloths.AddRange(found);
+        var found = FindObjectsByType<GpuMassAggregate>(FindObjectsSortMode.None);
+        aggregates.AddRange(found);
 
         int runningOffset = 0;
-        foreach (var c in cloths)
+        foreach (var agg in aggregates)
         {
-            c.Build(out var particles, out var constraints, particleRadiusSim);
+            agg.Build(out var particles, out var constraints, particleRadiusSim);
 
-            c.startIndex = runningOffset;
-            c.count = particles.Length;
+            agg.startIndex = runningOffset;
+            agg.count = particles.Length;
 
             allParticlesList.AddRange(particles);
 
@@ -190,7 +190,7 @@ public class GpuXpbdSolver : MonoBehaviour
             }
 
 
-            c.InitRenderer(this);
+            agg.InitRenderer(this);
             runningOffset += particles.Length;
         }
     }
@@ -253,14 +253,14 @@ public class GpuXpbdSolver : MonoBehaviour
         buffers.InitializeAttachments(attachObjs, attachCons, bufferGrowFactor);
         buffers.InitializeHash(compute, particleCount, particleRadiusSim, bufferGrowFactor);
 
-        if (cloths.Count > 0)
+        if (aggregates.Count > 0)
         {
-            var ranges = new ClothRange[cloths.Count];
-            for (int c = 0; c < cloths.Count; c++)
-                ranges[c] = new ClothRange { start = (uint)cloths[c].startIndex, count = (uint)cloths[c].count };
+            var ranges = new AggregateRange[aggregates.Count];
+            for (int c = 0; c < aggregates.Count; c++)
+                ranges[c] = new AggregateRange { start = (uint)aggregates[c].startIndex, count = (uint)aggregates[c].count };
 
-            buffers.InitializeCloth(ranges);
-            _aabbCpu = new Aabb[cloths.Count];
+            buffers.InitializeAggregates(ranges);
+            _aabbCpu = new Aabb[aggregates.Count];
         }
         else
         {
@@ -295,34 +295,34 @@ public class GpuXpbdSolver : MonoBehaviour
         // Hash
         buffers.BindHashTo(compute, Kid.HashClearCounts, Kid.HashCountCells, Kid.HashFillEntries, Kid.SolveParticleCollisionsHashed);
 
-        // Cloth-AABBs
-        buffers.BindCloth(compute, Kid.BuildClothAabbs);
+        // Aggregate-AABBs
+        buffers.BindAggregates(compute, Kid.BuildAggregateAabbs);
     }
 
     #endregion
 
 
     #region === Collision Helpers ===
-    private void UpdateClothBoundsGPUGetData()
+    private void UpdateAggregateBoundsGPUGetData()
     {
-        if (cloths.Count == 0 || buffers.ClothAabbsBuffer == null)
+        if (aggregates.Count == 0 || buffers.AggregateAabbsBuffer == null)
             return;
 
-        compute.Dispatch(Kid.BuildClothAabbs, cloths.Count, 1, 1);
-        buffers.ClothAabbsBuffer.GetData(_aabbCpu);
+        compute.Dispatch(Kid.BuildAggregateAabbs, aggregates.Count, 1, 1);
+        buffers.AggregateAabbsBuffer.GetData(_aabbCpu);
 
-        for (int c = 0; c < cloths.Count; c++)
+        for (int a = 0; a < aggregates.Count; a++)
         {
-            cloths[c].aabbMin = _aabbCpu[c].mn;
-            cloths[c].aabbMax = _aabbCpu[c].mx;
+            aggregates[a].aabbMin = _aabbCpu[a].mn;
+            aggregates[a].aabbMax = _aabbCpu[a].mx;
         }
     }
     private void GetBoundOverlaps()
     {
         _overlapSet.Clear();
-        foreach (var cloth in cloths)
+        foreach (var agg in aggregates)
         {
-            Bounds b = cloth.CurrentBounds;
+            Bounds b = agg.CurrentBounds;
             b.Expand(boundsPadding);
             if (b.size.x <= 0f || b.size.y <= 0f || b.size.z <= 0f) continue;
 

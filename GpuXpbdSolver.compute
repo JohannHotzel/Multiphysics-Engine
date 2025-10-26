@@ -7,7 +7,7 @@
 #pragma kernel UpdateVelocities
 
 // Collsion
-#pragma kernel BuildClothAabbs
+#pragma kernel BuildAggregateAabbs
 #pragma kernel BuildSphereConstraints
 #pragma kernel BuildCapsuleConstraints
 #pragma kernel BuildBoxConstraints
@@ -37,9 +37,9 @@ RWStructuredBuffer<Particle> particles; int particleCount;
 // Distance Constraints
 StructuredBuffer<DistanceConstraint> constraints; int constraintCount;
 
-// Cloth / Broadphase
-StructuredBuffer<ClothRange> clothRanges;
-RWStructuredBuffer<Aabb> clothAabbs;
+// Aggregate/Broadphase
+StructuredBuffer<AggregateRange> aggregateRanges;
+RWStructuredBuffer<Aabb> aggregateAabbs;
 
 // Colliders
 StructuredBuffer<SphereCollider> spheres; int sphereCount;
@@ -226,22 +226,22 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID)
 }
 
 
-// ------------------ BuildClothAabbs (per cloth) ------------------
+// ------------------ BuildAggregateAabbs (per aggregate) ------------------
 [numthreads(1, 1, 1)]
-void BuildClothAabbs(uint3 id : SV_DispatchThreadID)
+void BuildAggregateAabbs(uint3 id : SV_DispatchThreadID)
 {
-    uint c = id.x;
+    uint a = id.x;
 
-    ClothRange r = clothRanges[c];
+    AggregateRange r = aggregateRanges[a];
     uint start = r.start;
     uint count = r.count;
 
+    Aabb outAabb;
     if (count == 0)
     {
-        Aabb a;
-        a.mn = float3(0, 0, 0);
-        a.mx = float3(0, 0, 0);
-        clothAabbs[c] = a;
+        outAabb.mn = float3(0, 0, 0);
+        outAabb.mx = float3(0, 0, 0);
+        aggregateAabbs[a] = outAabb;
         return;
     }
 
@@ -256,10 +256,9 @@ void BuildClothAabbs(uint3 id : SV_DispatchThreadID)
         mx = max(mx, p);
     }
 
-    Aabb outAabb;
     outAabb.mn = mn;
     outAabb.mx = mx;
-    clothAabbs[c] = outAabb;
+    aggregateAabbs[a] = outAabb;
 }
 
 

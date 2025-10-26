@@ -25,17 +25,17 @@ struct DistanceConstraint
 };
 
 
-// ---- Cloth / Broadphase ----
-struct ClothRange
+// ---- Aggregates / Broadphase ----
+struct AggregateRange
 {
-	uint start;
-	uint count;
+    uint start;
+    uint count;
 };
 
 struct Aabb
 {
-	float3 mn;
-	float3 mx;
+    float3 mn;
+    float3 mx;
 };
 
 

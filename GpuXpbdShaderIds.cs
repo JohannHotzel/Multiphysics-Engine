@@ -19,8 +19,8 @@ public static class GpuXpbdShaderIds
 
         public static int SolveCollisionConstraints;
         public static int ResetCollisionCounts;
-        public static int BuildClothAabbs;
-        
+        public static int BuildAggregateAabbs;
+
         public static int SetAttachmentPositions;
 
         public static int HashClearCounts;
@@ -43,7 +43,7 @@ public static class GpuXpbdShaderIds
 
             SolveCollisionConstraints = cs.FindKernel("SolveCollisionConstraints");
             ResetCollisionCounts = cs.FindKernel("ResetCollisionCounts");
-            BuildClothAabbs = cs.FindKernel("BuildClothAabbs");
+            BuildAggregateAabbs = cs.FindKernel("BuildAggregateAabbs");
 
             SetAttachmentPositions = cs.FindKernel("SetAttachmentPositions");
 
@@ -71,9 +71,9 @@ public static class GpuXpbdShaderIds
         public static readonly int CountBuf = Shader.PropertyToID("countBuf");
 
 
-        // Colliders / Cloth
-        public static readonly int ClothRanges = Shader.PropertyToID("clothRanges");
-        public static readonly int ClothAabbs = Shader.PropertyToID("clothAabbs");
+        // Colliders / Aggregates
+        public static readonly int AggregateRanges = Shader.PropertyToID("aggregateRanges");
+        public static readonly int AggregateAabbs = Shader.PropertyToID("aggregateAabbs");
 
         public static readonly int CollisionConstraints = Shader.PropertyToID("collisionConstraints");
         public static readonly int CollisionCounts = Shader.PropertyToID("collisionCounts");

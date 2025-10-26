@@ -108,13 +108,13 @@ public struct Aabb
 }
 //This will be later changed to a aggregat strure used for Softbodies and Cloths
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
-public struct ClothRange
+public struct AggregateRange
 {
     public uint start;
     public uint count;
 
-    public static readonly int Stride = Marshal.SizeOf<ClothRange>();
-    public ClothRange(uint s, uint c)
+    public static readonly int Stride = Marshal.SizeOf<AggregateRange>();
+    public AggregateRange(uint s, uint c)
     {
         start = s;
         count = c;

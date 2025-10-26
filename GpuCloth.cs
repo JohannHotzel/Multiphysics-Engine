@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-public class GpuCloth : MonoBehaviour
+public class GpuCloth : GpuMassAggregate
 {
     [Header("Grid")]
     public int numParticlesX = 21;
@@ -25,7 +25,7 @@ public class GpuCloth : MonoBehaviour
     [Header("Pinning")]
     public bool pinTopRow = true;
 
-    // ---- Rendering ---- 
+
 
     [Header("Rendering")]
     public Material material;
@@ -36,15 +36,10 @@ public class GpuCloth : MonoBehaviour
     private GpuXpbdSolver _solver;    
     private bool _meshBuilt;
 
-    [HideInInspector] public int startIndex;  
-    [HideInInspector] public int count;      
-
-    [HideInInspector] public Vector3 aabbMin = Vector3.positiveInfinity;
-    [HideInInspector] public Vector3 aabbMax = Vector3.negativeInfinity;
 
 
     #region === Builder ===
-    public void Build(out GpuParticle[] particles, out GpuDistanceConstraint[] constraints, float radius)
+    public override void Build(out GpuParticle[] particles, out GpuDistanceConstraint[] constraints, float radius)
     {
         int nX = Mathf.Max(1, numParticlesX);
         int nY = Mathf.Max(1, numParticlesY);
@@ -116,7 +111,7 @@ public class GpuCloth : MonoBehaviour
     #endregion
 
     #region === Rendering ===
-    public void InitRenderer(GpuXpbdSolver solver)
+    public override void InitRenderer(GpuXpbdSolver solver)
     {
         _solver = solver;
         _mpb ??= new MaterialPropertyBlock();
@@ -175,6 +170,7 @@ public class GpuCloth : MonoBehaviour
                 triangles[t++] = i1; triangles[t++] = i2; triangles[t++] = i3;
             }
     }
+    
     void LateUpdate()
     {
         if (!_meshBuilt || _solver == null || material == null || !renderCloth) return;
@@ -200,19 +196,8 @@ public class GpuCloth : MonoBehaviour
             false
         );
     }
-
     #endregion
 
-
-    public Bounds CurrentBounds
-    {
-        get
-        {
-            if (float.IsInfinity(aabbMin.x) || float.IsInfinity(aabbMax.x))
-                return new Bounds(transform.position, Vector3.zero);
-            return new Bounds((aabbMin + aabbMax) * 0.5f, aabbMax - aabbMin);
-        }
-    }
     private void OnDrawGizmos()
     {
         Vector3 size = new Vector3(width, height, 0.01f);
