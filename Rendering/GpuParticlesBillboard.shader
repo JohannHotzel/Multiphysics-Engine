@@ -23,7 +23,6 @@ Shader "Unlit/GpuParticlesBillboard"
 
             #include "UnityCG.cginc"
 
-            // Muss 1:1 zu deinem C#/Compute-Struct passen (ohne Padding)
             struct Particle {
                 float3 positionP;
                 float3 positionX;
@@ -42,7 +41,7 @@ Shader "Unlit/GpuParticlesBillboard"
             void Setup() {}
 
             struct appdata {
-                float3 vertex : POSITION; // Quad-Vertex (-0.5..0.5)
+                float3 vertex : POSITION; 
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -51,12 +50,10 @@ Shader "Unlit/GpuParticlesBillboard"
             v2f vert (appdata v)
             {
                 UNITY_SETUP_INSTANCE_ID(v);
-                uint id = unity_InstanceID;              // Index ins Buffer
+                uint id = unity_InstanceID;           
 
-                // Render aus der vorhergesagten Position
                 float3 center = _ParticleBuffer[id].positionX;
 
-                // Kamera-Billboarding
                 float3 camRight = float3(UNITY_MATRIX_I_V._m00, UNITY_MATRIX_I_V._m10, UNITY_MATRIX_I_V._m20);
                 float3 camUp    = float3(UNITY_MATRIX_I_V._m01, UNITY_MATRIX_I_V._m11, UNITY_MATRIX_I_V._m21);
 

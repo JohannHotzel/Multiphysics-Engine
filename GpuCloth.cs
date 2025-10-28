@@ -210,8 +210,8 @@ public class GpuCloth : GpuMassAggregate
         var b = CurrentBounds;
         if (b.size.sqrMagnitude > 0f)
         {
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawWireCube(b.center, b.size);
+            Gizmos.color = new Color(0f, 1f, 1f, 0.1f);
+            Gizmos.DrawCube(b.center, b.size);
         }
     }
     private void OnDrawGizmosSelected()
@@ -225,7 +225,7 @@ public class GpuCloth : GpuMassAggregate
         var b = CurrentBounds;
         if (b.size.sqrMagnitude > 0f)
         {
-            Gizmos.color = new Color(0f, 1f, 1f, 0.1f);
+            Gizmos.color = new Color(1, 0.5f, 0f, 0.1f);
             Gizmos.DrawCube(b.center, b.size);
         }
     }
