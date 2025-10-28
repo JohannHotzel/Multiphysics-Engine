@@ -35,13 +35,13 @@ Shader "URP/Xpbd/ClothGPUPos"
             #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile _ _SHADOWS_SOFT
             #pragma multi_compile_fog
-
+             
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
             struct Particle {
-                float3 positionP;
+                float3 positionP; 
                 float3 positionX;
                 float3 positionPredicted;
                 float3 velocity;
@@ -176,7 +176,7 @@ Shader "URP/Xpbd/ClothGPUPos"
 
             ZWrite On
             ZTest LEqual
-
+             
             HLSLPROGRAM
             #pragma target 5.0
             #pragma vertex   VertShadow
@@ -189,6 +189,31 @@ Shader "URP/Xpbd/ClothGPUPos"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+            // Kein ShadowCasterPass.hlsl Include nötig!
+
+            // ---- Lokale Ersatz-Implementierung von GetShadowPositionHClip ----
+            float4 GetShadowPositionHClip_Custom(float3 positionWS, float3 normalWS)
+            {
+                #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
+                    // Punkt-/Spot-Licht: aus Position Richtung zur Lichtquelle
+                    float3 lightDirWS = normalize(_LightPosition.xyz - positionWS);
+                #else
+                    // Direktionales Hauptlicht
+                    float3 lightDirWS = _MainLightPosition.xyz;
+                #endif
+
+                float3 posBiasWS  = ApplyShadowBias(positionWS, normalWS, lightDirWS);
+                float4 positionCS = TransformWorldToHClip(posBiasWS);
+
+                // Near-Clip Stabilisierung wie URP
+                #if UNITY_REVERSED_Z
+                    positionCS.z = min(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+                #else
+                    positionCS.z = max(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+                #endif
+
+                return positionCS;
+            }
 
             struct Particle {
                 float3 positionP;
@@ -230,10 +255,10 @@ Shader "URP/Xpbd/ClothGPUPos"
                 float3 pym = GetPosWS(vx, vy-1);
 
                 float3 dx = pxp - pxm;
-                float3 dy = pyp - pym;
+                float3 dy = pyp - pym; 
                 float3 n  = normalize(cross(dy, dx) + 1e-7);
 
-                OUT.positionCS = GetShadowPositionHClip(p, n);
+                OUT.positionCS = GetShadowPositionHClip_Custom(p, n);
                 return OUT;
             }
 
